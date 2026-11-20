@@ -47,12 +47,13 @@ Puis ouvre <http://localhost:8000>.
 ```bash
 python scripts/fetch_wikidata.py   # rapide (~1 min)
 python scripts/fetch_opendata.py   # Mérimée + Cartofriches + CASIAS (~200 Mo à télécharger)
-python scripts/fetch_spots.py      # OpenStreetMap, plus long ; reprend où il s'est arrêté si les serveurs saturent
+pip install osmium                 # puis, sous Linux : apt install osmium-tool
+python scripts/fetch_osm_extract.py   # OpenStreetMap : télécharge l'extrait officiel France (~5 Go, Geofabrik) et le filtre
 ```
 
 `fetch_wikidata.py` récupère les lieux marqués *désaffecté*, *abandonné*, *hors service*, *en ruine*, *fermé définitivement*, les ruines et villages fantômes (données CC0, avec photo quand elle existe).
 
-`fetch_spots.py` interroge l'API Overpass d'OpenStreetMap (aucune dépendance à installer) et réécrit `data/spots.json`.
+`fetch_osm_extract.py` lit l'extrait officiel OpenStreetMap de la France (aucun serveur partagé, donc fiable) et réécrit `data/spots.json`. L'ancien `fetch_spots.py` (API Overpass) reste disponible mais ces serveurs sont souvent saturés.
 Sur GitHub, le workflow `.github/workflows/update-data.yml` le fait tout seul chaque lundi (ou à la demande via l'onglet **Actions → Run workflow**).
 
 ## Publier sur GitHub Pages

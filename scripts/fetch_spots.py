@@ -77,43 +77,49 @@ def tag_any(tags: dict, *keys: str) -> str:
     return ""
 
 
-def categorize(tags: dict) -> str:
-    """Classe le lieu dans une grande catégorie lisible."""
-    t = {k: v.lower() for k, v in tags.items()}
-    joined = " ".join(f"{k}={v}" for k, v in t.items())
-    name = t.get("name", "")
+# (catégorie, mots dans les tags/type, mots dans le nom) — l'ordre compte.
+RULES = [
+    ("militaire", ("bunker", "military", "militaire", "blockhouse", "air base", "barracks", "aérienne"),
+                  ("blockhaus", "bunker", "fort ", "caserne", "batterie")),
+    ("hopital", ("hospital", "clinic", "sanatorium", "asylum"),
+                ("sanatorium", "hôpital", "hopital", "préventorium", "asile", "clinique")),
+    ("religieux", ("place_of_worship", "church", "chapel", "monastery", "abbey", "convent", "cathedral",
+                   "temple", "priory"),
+                  ("église", "chapelle", "abbaye", "prieuré", "couvent", "monastère")),
+    ("industriel", ("industrial", "factory", "works", "=mine", "quarry", "mill", "kiln", "chimney", "silo",
+                    "gasometer", "power_plant", "power station", "nuclear", "warehouse", "adit", "mineshaft",
+                    "crane", "storage_tank", "sugar refinery", "foundry", "barrage", "dam", "réacteur", "reactor", "centrale"),
+                   ("usine", "moulin", "mine ", "carrière", "forge", "filature", "sucrerie", "tannerie",
+                    "verrerie", "papeterie", "distillerie", "fonderie")),
+    ("transport", ("station", "railway", "train", "tunnel", "aerodrome", "airport", "hangar", "lighthouse",
+                   "bridge", "tram", "trolleybus", "viaduc", "viaduct", "gare", "triage"),
+                  ("gare", "tunnel", "phare", "aérodrome")),
+    ("chateau", ("castle", "manor", "palace", "chateau", "château", "fortification", "citywalls", "keep"),
+                ("château", "manoir", "castel", "donjon")),
+    ("loisirs", ("school", "hotel", "restaurant", "cinema", "theatre", "swimming", "sports", "stadium",
+                 "camp_site", "theme_park", "amusement", "nightclub", "casino", "shop", "=pub", "=bar",
+                 "cafe", "retail", "commercial", "racecourse", "hippodrome", "concert", "prison", "escalier"),
+                ("école", "hôtel", "colonie", "piscine", "cinéma", "discothèque", "lycée", "collège")),
+    ("habitation", ("house", "residential", "farm", "barn", "detached", "apartments", "villa", "cabin",
+                    "=hut", "shed", "dwelling"),
+                   ("maison", "ferme", "villa", "mas ", "grange", "bastide")),
+]
 
-    if t.get("military") == "bunker" or t.get("building") == "bunker" or "bunker" in joined \
-            or "blockhaus" in name or tag_any(t, "military") or "fort " in name or name.startswith("fort"):
-        return "militaire"
-    if any(w in joined for w in ("hospital", "clinic", "sanatorium", "asylum")) \
-            or any(w in name for w in ("sanatorium", "hôpital", "hopital", "préventorium", "asile", "clinique")):
-        return "hopital"
-    if any(w in joined for w in ("place_of_worship", "church", "chapel", "monastery", "abbey", "convent", "cathedral")) \
-            or any(w in name for w in ("église", "chapelle", "abbaye", "prieuré", "couvent", "monastère")):
-        return "religieux"
-    if any(w in joined for w in ("castle", "manor", "palace", "chateau", "château", "fortification", "citywalls")) \
-            or any(w in name for w in ("château", "manoir", "castel", "tour ", "donjon")):
-        return "chateau"
-    if any(w in joined for w in ("industrial", "factory", "works", "mine", "quarry", "mill", "kiln",
-                                  "chimney", "silo", "gasometer", "power_plant", "warehouse", "watermill",
-                                  "windmill", "adit", "mineshaft", "crane", "storage_tank")) \
-            or any(w in name for w in ("usine", "moulin", "mine", "carrière", "forge", "filature", "sucrerie",
-                                       "tannerie", "verrerie", "papeterie", "distillerie", "fonderie")):
-        return "industriel"
-    if any(w in joined for w in ("station", "railway", "train", "tunnel", "aerodrome", "airport", "hangar",
-                                  "lighthouse", "bridge")) \
-            or any(w in name for w in ("gare", "tunnel", "phare", "aérodrome")):
-        return "transport"
-    if any(w in joined for w in ("school", "hotel", "restaurant", "cinema", "theatre", "swimming_pool",
-                                  "sports_centre", "stadium", "camp_site", "colonie", "theme_park",
-                                  "nightclub", "casino", "shop", "pub", "bar", "cafe", "retail", "commercial")) \
-            or any(w in name for w in ("école", "hôtel", "colonie", "piscine", "cinéma", "discothèque")):
-        return "loisirs"
-    if any(w in joined for w in ("house", "residential", "farm", "barn", "detached", "apartments",
-                                  "villa", "cabin", "hut", "shed")) \
-            or any(w in name for w in ("maison", "ferme", "villa", "mas ", "grange", "bastide")):
-        return "habitation"
+
+def categorize(tags: dict) -> str:
+    """Classe le lieu dans une grande catégorie lisible.
+    Les tags / le type de l'objet priment ; le nom ne sert qu'en dernier recours
+    (sinon la « gare de Château-Thierry » finirait dans les châteaux)."""
+    t = {k: v.lower() for k, v in tags.items()}
+    joined = " ".join(f"{k}={v}" for k, v in t.items() if k != "name")
+    name = t.get("name", "") + " "
+
+    for cat, tag_words, _ in RULES:
+        if any(w in joined for w in tag_words):
+            return cat
+    for cat, _, name_words in RULES:
+        if any(w in name for w in name_words):
+            return cat
     if t.get("historic") == "ruins" or t.get("ruins") == "yes" or t.get("building") == "ruins":
         return "ruines"
     return "autre"
@@ -191,8 +197,11 @@ def fetch_tile(bbox: tuple) -> list:
 
 def fetch() -> list:
     """Télécharge chaque tuile, avec un cache pour reprendre là où on s'est arrêté.
-    Le cache est vidé à la fin d'un téléchargement complet."""
+    Les tuiles de plus de 24 h sont retéléchargées."""
     CACHE.mkdir(parents=True, exist_ok=True)
+    for old in CACHE.glob("tile_*.json"):
+        if time.time() - old.stat().st_mtime > 86400:
+            old.unlink()
     all_tiles = list(tiles())
     elements = []
     for i, bbox in enumerate(all_tiles, 1):
@@ -210,12 +219,8 @@ def fetch() -> list:
     return elements
 
 
-def clear_cache() -> None:
-    for f in CACHE.glob("tile_*.json"):
-        f.unlink()
 
-
-def main() -> None:  # noqa: C901
+def main() -> None:
     # Console Windows : forcer l'UTF-8 pour les accents et flèches
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -256,7 +261,6 @@ def main() -> None:  # noqa: C901
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    clear_cache()
 
     counts: dict[str, int] = {}
     for s in spots:

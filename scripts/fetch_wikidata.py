@@ -144,7 +144,7 @@ def main() -> None:
         if any(x in en for x in EXCLUDE_TYPES):
             continue
         name = it["name"] if it["name"] != qid else ""
-        tags = {"name": name, "type": " ".join(sorted(it["en"]))}
+        tags = {"name": name, "type": " ".join(sorted(it["en"])), "typefr": " ".join(sorted(it["fr"]))}
         if "ruines" in it["state"]:
             tags["historic"] = "ruins"
         label = ", ".join(sorted(it["fr"]))[:80] or ", ".join(sorted(it["state"]))

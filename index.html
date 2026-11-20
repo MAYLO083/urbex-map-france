@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
   <title>Urbex Map France</title>
   <meta name="description" content="Carte des lieux abandonnés, désaffectés et en ruine de France.">
 
@@ -11,68 +11,138 @@
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <meta name="theme-color" content="#16181d">
+  <meta name="theme-color" content="#0d0f13">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Urbex Map">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta property="og:image" content="icons/logo-1024.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
-  <aside id="panel">
-    <header>
-      <h1><img src="icons/logo.svg" alt="" class="logo"> Urbex Map <span>France</span></h1>
-      <button id="toggle-panel" title="Replier le panneau" aria-label="Replier le panneau">☰</button>
-    </header>
-
-    <div class="panel-body">
-      <input id="search" type="search" placeholder="Rechercher un nom (usine, sanatorium…)" autocomplete="off">
-      <ul id="results"></ul>
-
-      <h2>Catégories</h2>
-      <div id="filters"></div>
-      <label class="check"><input type="checkbox" id="named-only"> Seulement les lieux nommés</label>
-
-      <h2>Sources</h2>
-      <div id="sources"></div>
-
-      <a class="button propose" href="https://github.com/MAYLO083/urbex-map-france/issues/new?template=nouveau-spot.yml" target="_blank" rel="noopener">📤 Proposer un lieu à la communauté</a>
-
-      <h2>Mes spots</h2>
-      <p class="hint">Clic droit (ou appui long) sur la carte pour ajouter un spot perso. Ils sont enregistrés dans ton navigateur.</p>
-      <div class="row">
-        <button id="export">Exporter</button>
-        <label class="button">Importer<input id="import" type="file" accept=".json,.geojson" hidden></label>
-      </div>
-
-      <p id="stats" class="hint"></p>
-      <p class="hint small">
-        Données : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© contributeurs OpenStreetMap</a> (ODbL).
-        Un lieu peut avoir été démoli, rénové ou être surveillé.
-        <a href="#" id="show-disclaimer">Avertissement</a>
-      </p>
-    </div>
-  </aside>
+  <!-- Écran de chargement -->
+  <div id="splash">
+    <img src="icons/logo.svg" alt="">
+    <div class="splash-title">Urbex Map</div>
+    <div class="splash-sub" id="splash-sub">Chargement des lieux…</div>
+    <div class="splash-bar"><span></span></div>
+  </div>
 
   <div id="map"></div>
 
+  <!-- Panneau flottant (bas de l'écran sur mobile) -->
+  <aside id="panel">
+    <div class="grabber" id="grabber" aria-hidden="true"></div>
+
+    <header class="panel-head">
+      <img src="icons/logo.svg" alt="" class="logo">
+      <div class="brand">
+        <h1>Urbex Map</h1>
+        <p id="count-line"><b id="count-visible">—</b> lieux sur la carte</p>
+      </div>
+      <button id="toggle-panel" class="icon-btn" title="Replier" aria-label="Replier le panneau">
+        <svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
+    </header>
+
+    <div class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="search" type="search" placeholder="Rechercher un lieu, une ville…" autocomplete="off" enterkeyhint="search">
+      <button id="search-clear" class="clear" aria-label="Effacer" hidden>✕</button>
+    </div>
+    <ul id="results"></ul>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="explore" role="tab">Explorer</button>
+      <button class="tab" data-tab="mine" role="tab">Mes spots <span id="mine-count" class="pill"></span></button>
+      <button class="tab" data-tab="info" role="tab">Infos</button>
+    </nav>
+
+    <div class="panel-body">
+      <!-- Explorer -->
+      <section class="tab-page active" data-page="explore">
+        <div class="section-head">
+          <h2>Catégories</h2>
+          <div class="mini-actions"><button data-all="1">Tout</button><button data-all="0">Aucune</button></div>
+        </div>
+        <div id="filters" class="chips"></div>
+
+        <label class="switch-row">
+          <span>Seulement les lieux nommés</span>
+          <input type="checkbox" id="named-only"><i></i>
+        </label>
+
+        <div class="section-head"><h2>Sources</h2></div>
+        <div id="sources" class="list"></div>
+
+        <a class="cta" href="https://github.com/MAYLO083/urbex-map-france/issues/new?template=nouveau-spot.yml" target="_blank" rel="noopener">
+          <span>＋</span> Proposer un lieu à la communauté
+        </a>
+      </section>
+
+      <!-- Mes spots -->
+      <section class="tab-page" data-page="mine">
+        <div class="empty-hint">
+          <b>Ajoute tes propres lieux</b>
+          <span>Clic droit sur la carte (ou appui long sur mobile). Ils restent privés, enregistrés sur cet appareil.</span>
+        </div>
+        <ul id="mine-list" class="list"></ul>
+        <div class="row">
+          <button id="export" class="btn">Exporter</button>
+          <label class="btn">Importer<input id="import" type="file" accept=".json,.geojson" hidden></label>
+        </div>
+      </section>
+
+      <!-- Infos -->
+      <section class="tab-page" data-page="info">
+        <div class="card warn">
+          <h3>⚠️ Avant d'explorer</h3>
+          <p>La plupart de ces lieux sont des <b>propriétés privées</b> : y entrer sans autorisation peut constituer une infraction. Ils sont aussi <b>dangereux</b> (effondrements, amiante, puits). Ne pars jamais seul, ne casse rien, ne prends rien.</p>
+        </div>
+        <div class="card">
+          <h3>D'où viennent les lieux ?</h3>
+          <p>OpenStreetMap (ODbL), Wikidata (CC0), base Mérimée, Cartofriches et CASIAS (Licence Ouverte), et les propositions validées de la communauté. Mise à jour chaque semaine. Un lieu peut avoir été démoli, rénové ou être gardienné.</p>
+          <p class="muted" id="updated-line"></p>
+        </div>
+        <div class="row">
+          <a class="btn" href="https://github.com/MAYLO083/urbex-map-france" target="_blank" rel="noopener">Code sur GitHub</a>
+          <button class="btn" id="show-disclaimer">Règles</button>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- Commandes de carte -->
+  <div id="controls">
+    <button class="ctl" id="zoom-in" aria-label="Zoomer"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="ctl" id="zoom-out" aria-label="Dézoomer"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+    <button class="ctl gap" id="locate" aria-label="Me localiser"><svg viewBox="0 0 24 24"><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="1.6" class="fill"/></svg></button>
+    <button class="ctl" id="layers-btn" aria-label="Fond de carte"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></button>
+    <div id="layers-menu" hidden></div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+
   <dialog id="disclaimer">
-    <h2>⚠️ Avant d'explorer</h2>
+    <img src="icons/logo.svg" alt="" class="dlg-logo">
+    <h2>Avant d'explorer</h2>
     <ul>
-      <li><strong>Propriété privée :</strong> la plupart de ces lieux appartiennent à quelqu'un. Y entrer sans autorisation peut constituer une infraction (violation de domicile, intrusion, dégradation).</li>
-      <li><strong>Danger :</strong> planchers effondrés, amiante, puits, structures instables. Ne pars jamais seul et préviens quelqu'un.</li>
-      <li><strong>Respect :</strong> ne casse rien, ne prends rien, ne laisse rien. <em>Take only pictures, leave only footprints.</em></li>
-      <li>Les données viennent d'OpenStreetMap et peuvent être fausses ou périmées.</li>
+      <li><span>🔒</span><div><b>Propriété privée.</b> La plupart de ces lieux appartiennent à quelqu'un. Y entrer sans autorisation peut constituer une infraction.</div></li>
+      <li><span>⚠️</span><div><b>Danger.</b> Planchers effondrés, amiante, puits, structures instables. Ne pars jamais seul et préviens quelqu'un.</div></li>
+      <li><span>📷</span><div><b>Respect.</b> Ne casse rien, ne prends rien, ne laisse rien. <em>Take only pictures, leave only footprints.</em></div></li>
+      <li><span>🗺️</span><div><b>Données indicatives.</b> Un lieu peut avoir été démoli, rénové ou être surveillé.</div></li>
     </ul>
-    <form method="dialog"><button autofocus>J'ai compris</button></form>
+    <form method="dialog"><button autofocus class="btn primary">J'ai compris</button></form>
   </dialog>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/app.js?v=6"></script>
 </body>
 </html>

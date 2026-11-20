@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#2c313d"/>
+      <stop offset="1" stop-color="#0d0f13"/>
+    </radialGradient>
+    <linearGradient id="pin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc247"/>
+      <stop offset="0.55" stop-color="#ff8a1f"/>
+      <stop offset="1" stop-color="#e2461b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ff9f1c" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ff9f1c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Fond (iOS arrondit les coins tout seul) -->
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- Courbes de niveau, façon carte -->
+  <g fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="6">
+    <path d="M-20 170 C 200 120, 330 240, 560 180 S 900 110, 1050 190"/>
+    <path d="M-20 260 C 180 220, 360 330, 600 270 S 880 220, 1050 290"/>
+    <path d="M-20 820 C 220 760, 400 880, 640 820 S 900 760, 1050 840"/>
+    <path d="M-20 910 C 200 860, 420 960, 660 905 S 920 860, 1050 930"/>
+  </g>
+
+  <!-- Halo + ombre -->
+  <circle cx="512" cy="440" r="380" fill="url(#glow)"/>
+  <ellipse cx="512" cy="958" rx="130" ry="26" fill="#000" opacity="0.45"/>
+
+  <g transform="translate(512 520) scale(1.11) translate(-512 -520)">
+  <!-- Épingle de carte -->
+  <path d="M512 900 C 410 770, 212 620, 212 430 A 300 300 0 1 1 812 430 C 812 620, 614 770, 512 900 Z"
+        fill="url(#pin)" stroke="#111" stroke-width="14" stroke-linejoin="round"/>
+
+  <!-- Usine en ruine (silhouette) -->
+  <g fill="#16181d">
+    <!-- toits en dents de scie, le troisième effondré, cheminée cassée -->
+    <path d="M338 610 L338 440 L428 360 L428 440 L512 360 L512 440
+             L548 402 L562 428 L578 396 L596 424 L606 410
+             L606 250 L622 238 L634 252 L646 232 L660 246
+             L660 440 L688 440 L688 610 Z"/>
+    <!-- sol -->
+    <rect x="300" y="598" width="424" height="26" rx="13"/>
+  </g>
+  <!-- fenêtres béantes (laissent voir l'orange) -->
+  <g fill="#ffb03b">
+    <path d="M368 590 L368 500 A 22 22 0 0 1 412 500 L412 590 Z"/>
+    <path d="M446 590 L446 500 A 22 22 0 0 1 490 500 L490 590 Z"/>
+    <path d="M524 590 L524 500 A 22 22 0 0 1 568 500 L568 590 Z"/>
+    <path d="M610 590 L610 520 A 20 20 0 0 1 650 520 L650 590 Z"/>
+  </g>
+  <!-- fissure et brique tombée -->
+  <path d="M470 440 L486 470 L474 486 L492 520" fill="none" stroke="#16181d" stroke-width="8" stroke-linecap="round"/>
+  <rect x="604" y="300" width="22" height="14" fill="#ffb03b" transform="rotate(-12 615 307)"/>
+  </g>
+</svg>

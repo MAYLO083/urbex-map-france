@@ -162,6 +162,8 @@ def main() -> None:
         "fields": ["lat", "lon", "name", "category", "osm_type", "osm_id"],
         "spots": spots,
     }
+    if len(spots) < 50:
+        sys.exit(f"Seulement {len(spots)} lieux : fichier précédent conservé")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 

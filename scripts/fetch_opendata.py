@@ -62,6 +62,8 @@ def download(url: str, name: str) -> Path:
 
 def write(name: str, source: str, fields: list, spots: list) -> None:
     out = DATA / f"spots_{name}.json"
+    if len(spots) < 50:  # téléchargement vide ou tronqué : on garde la version précédente
+        raise RuntimeError(f"seulement {len(spots)} lieux pour {name}, fichier précédent conservé")
     payload = {
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": source,

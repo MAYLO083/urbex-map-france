@@ -1,0 +1,45 @@
+name: Ajouter un lieu proposé
+
+# Se déclenche quand le label « validé » est posé sur une issue.
+# Seuls les membres du dépôt peuvent poser des labels : c'est la modération.
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: community-spots
+  cancel-in-progress: false
+
+jobs:
+  add:
+    if: github.event.label.name == 'validé'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ajouter le lieu
+        id: add
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: python scripts/add_community_spot.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/spots_communaute.json
+          git diff --cached --quiet || git commit -m "Ajout du lieu proposé dans #${{ github.event.issue.number }}"
+          git push
+      - name: Répondre et fermer l'issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} \
+            --body "✅ Merci ! Le lieu est ajouté à la carte (visible d'ici quelques minutes)."
+          gh issue close ${{ github.event.issue.number }} --repo ${{ github.repository }}

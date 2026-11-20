@@ -18,6 +18,11 @@
   const STORE_KEY = "urbex.mine.v1";
   const FILTER_KEY = "urbex.filters.v1";
   const SEEN_KEY = "urbex.disclaimer.v1";
+  const SOURCE_KEY = "urbex.sources.v1";
+  const REPO = "https://github.com/MAYLO083/urbex-map-france";
+  const proposeUrl = (lat, lon, name = "") =>
+    `${REPO}/issues/new?template=nouveau-spot.yml&title=${encodeURIComponent("[Spot] " + name)}` +
+    `&coordonnees=${encodeURIComponent(lat.toFixed(5) + ", " + lon.toFixed(5))}&nom=${encodeURIComponent(name)}`;
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -84,19 +89,48 @@
     disableClusteringAtZoom: 16,
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
+    iconCreateFunction: (c) => {
+      const n = c.getChildCount();
+      const size = n < 10 ? 36 : n < 100 ? 44 : n < 1000 ? 52 : 60;
+      const cls = n < 10 ? "s" : n < 100 ? "m" : n < 1000 ? "l" : "xl";
+      const label = n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1).replace(".0", "") + "k" : n;
+      return L.divIcon({
+        html: `<div><span>${label}</span></div>`,
+        className: `ucluster ucluster-${cls}`,
+        iconSize: [size, size],
+      });
+    },
   });
   map.addLayer(cluster);
 
-  let spots = [];          // [lat, lon, name, cat, osmType, osmId]
+  let spots = [];          // [lat, lon, name, cat, description, id, image?] + ._src
   let markers = [];        // marqueur par spot (créé une fois)
   const savedFilters = JSON.parse(localStorage.getItem(FILTER_KEY) || "null");
   const active = new Set(savedFilters || Object.keys(CATEGORIES));
+  const savedSources = JSON.parse(localStorage.getItem(SOURCE_KEY) || "null");
   let namedOnly = false;
 
   const osmUrl = (id) => {
     const t = { n: "node", w: "way", r: "relation" }[id[0]];
     return `https://www.openstreetmap.org/${t}/${id.slice(1)}`;
   };
+
+  // Chaque base de données : fichier, nom, lien vers la fiche d'origine
+  const SOURCES = {
+    communaute: { label: "Communauté", file: "data/spots_communaute.json", hint: "lieux proposés et validés",
+      link: (id) => [`${REPO}/issues/${id.slice(1)}`, "Voir la proposition"] },
+    osm: { label: "OpenStreetMap", file: "data/spots.json", hint: "tags abandonné / en ruine / bunker",
+      link: (id) => [osmUrl(id), "Voir / corriger sur OpenStreetMap"] },
+    wikidata: { label: "Wikidata", file: "data/spots_wikidata.json", hint: "désaffecté, abandonné…",
+      link: (id) => [`https://www.wikidata.org/wiki/${id}`, "Fiche Wikidata"] },
+    merimee: { label: "Monuments historiques", file: "data/spots_merimee.json", hint: "Mérimée : vestiges, désaffectés, menacés",
+      link: (id) => [`https://pop.culture.gouv.fr/notice/merimee/${id.slice(1)}`, "Fiche Mérimée (POP)"] },
+    friches: { label: "Friches (Cartofriches)", file: "data/spots_friches.json", hint: "Cerema : friches non reconverties",
+      link: (id) => [`https://cartofriches.cerema.fr/cartofriches/?site=${encodeURIComponent(id.slice(1))}`, "Fiche Cartofriches"] },
+    casias: { label: "Anciens sites industriels", file: "data/spots_casias.json", hint: "CASIAS : usines à l'arrêt, souvent démolies",
+      link: (id) => [`https://fiches-risques.brgm.fr/georisques/casias/${id.slice(1)}`, "Fiche Géorisques"] },
+  };
+  const activeSources = new Set(savedSources || Object.keys(SOURCES));
 
   const linksHtml = (lat, lon) => `
     <div class="links">
@@ -108,10 +142,9 @@
 
   const spotPopup = (s) => {
     const cat = CATEGORIES[s[3]] || CATEGORIES.autre;
-    const isWd = s[5][0] === "Q";
-    const source = isWd
-      ? `<a target="_blank" rel="noopener" href="https://www.wikidata.org/wiki/${s[5]}">Fiche Wikidata</a>`
-      : `<a target="_blank" rel="noopener" href="${osmUrl(s[5])}">Voir / corriger sur OpenStreetMap</a>`;
+    const src = SOURCES[s._src];
+    const [href, text] = src.link(s[5]);
+    const source = `<a target="_blank" rel="noopener" href="${href}">${text}</a>`;
     const img = s[6]
       ? `<a target="_blank" rel="noopener" href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(s[6])}">
            <img src="https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(s[6])}?width=320" alt="" loading="lazy" class="thumb"></a>`
@@ -120,7 +153,7 @@
       ${img}
       <h3>${esc(s[2] || "Lieu sans nom")}</h3>
       <span class="tag" style="background:${cat.color}">${cat.label}</span>
-      <span class="src">${isWd ? "Wikidata" : "OpenStreetMap"}</span>
+      <span class="src">${src.label}</span>
       ${s[4] ? `<div class="osm">${esc(s[4])}</div>` : ""}
       <div class="osm">${s[0].toFixed(5)}, ${s[1].toFixed(5)}</div>
       ${linksHtml(s[0], s[1])}
@@ -131,13 +164,15 @@
   const makeMarker = (s) => {
     const cat = CATEGORIES[s[3]] || CATEGORIES.autre;
     const m = L.circleMarker([s[0], s[1]], {
-      renderer, radius: 6, weight: 2, color: "#fff", fillColor: cat.color, fillOpacity: 0.95,
+      renderer, radius: 9, weight: 3, color: "#111", fillColor: cat.color, fillOpacity: 1,
     });
+    m.on("mouseover", () => m.setStyle({ radius: 13, weight: 4 }));
+    m.on("mouseout", () => m.setStyle({ radius: 9, weight: 3 }));
     m.bindPopup(() => spotPopup(s));
     return m;
   };
 
-  const visible = (s) => active.has(s[3]) && (!namedOnly || s[2]);
+  const visible = (s) => active.has(s[3]) && activeSources.has(s._src) && (!namedOnly || s[2]);
 
   const refresh = () => {
     cluster.clearLayers();
@@ -148,6 +183,28 @@
       `${list.length.toLocaleString("fr-FR")} lieux affichés sur ${spots.length.toLocaleString("fr-FR")}` +
       (window.__generated ? ` · données du ${new Date(window.__generated).toLocaleDateString("fr-FR")}` : "");
     localStorage.setItem(FILTER_KEY, JSON.stringify([...active]));
+    localStorage.setItem(SOURCE_KEY, JSON.stringify([...activeSources]));
+  };
+
+  const buildSourceFilters = () => {
+    const counts = {};
+    for (const s of spots) counts[s._src] = (counts[s._src] || 0) + 1;
+    const box = document.getElementById("sources");
+    box.innerHTML = "";
+    for (const [key, src] of Object.entries(SOURCES)) {
+      if (!counts[key]) continue;
+      const lab = document.createElement("label");
+      lab.className = "check";
+      lab.title = src.hint;
+      lab.innerHTML = `<input type="checkbox" ${activeSources.has(key) ? "checked" : ""}>
+        <span>${src.label}<br><small class="hint">${src.hint}</small></span>
+        <span class="count">${counts[key].toLocaleString("fr-FR")}</span>`;
+      lab.querySelector("input").addEventListener("change", (e) => {
+        e.target.checked ? activeSources.add(key) : activeSources.delete(key);
+        refresh();
+      });
+      box.appendChild(lab);
+    }
   };
 
   // ---------- Filtres ----------
@@ -231,7 +288,7 @@
   let mine = JSON.parse(localStorage.getItem(STORE_KEY) || "[]");
   const saveMine = () => localStorage.setItem(STORE_KEY, JSON.stringify(mine.map(({ _marker, ...m }) => m)));
 
-  const mineIcon = L.divIcon({ className: "", html: `<div class="pin mine" style="background:${MINE_COLOR}"></div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+  const mineIcon = L.divIcon({ className: "", html: `<div class="pin mine" style="background:${MINE_COLOR}"></div>`, iconSize: [22, 22], iconAnchor: [11, 11] });
 
   const minePopup = (m) => {
     const div = document.createElement("div");
@@ -241,7 +298,9 @@
       <textarea class="t" placeholder="Notes (accès, état, date de visite…)">${esc(m.note)}</textarea>
       <div class="osm">${m.lat.toFixed(5)}, ${m.lon.toFixed(5)}</div>
       ${linksHtml(m.lat, m.lon)}
-      <div class="row"><button class="s">Enregistrer</button><button class="d">Supprimer</button></div>`;
+      <div class="row"><button class="s">Enregistrer</button><button class="d">Supprimer</button></div>
+      <div class="links"><a class="p" target="_blank" rel="noopener" href="#">📤 Proposer ce lieu sur la carte publique</a></div>`;
+    div.querySelector(".p").onclick = (e) => { e.currentTarget.href = proposeUrl(m.lat, m.lon, div.querySelector(".n").value.trim()); };
     div.querySelector(".s").onclick = () => {
       m.name = div.querySelector(".n").value.trim() || "Mon spot";
       m.note = div.querySelector(".t").value;
@@ -321,11 +380,17 @@
   // ---------- Chargement des données ----------
   document.getElementById("stats").textContent = "Chargement des lieux…";
   const load = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  Promise.all([load("data/spots.json"), load("data/spots_wikidata.json")])
-    .then(([osm, wd]) => {
-      if (!osm && !wd) throw new Error("aucune donnée");
-      window.__generated = (osm || wd).generated;
-      spots = [...(osm?.spots || []), ...(wd?.spots || [])];
+  const keys = Object.keys(SOURCES);
+  Promise.all(keys.map((k) => load(SOURCES[k].file)))
+    .then((all) => {
+      spots = [];
+      all.forEach((data, i) => {
+        if (!data) return;
+        if (!window.__generated || data.generated > window.__generated) window.__generated = data.generated;
+        for (const s of data.spots) { s._src = keys[i]; spots.push(s); }
+      });
+      if (!spots.length) throw new Error("aucune donnée");
+      buildSourceFilters();
       markers = spots.map(makeMarker);
       normNames = spots.map((s) => (s[2] ? norm(s[2]) : ""));
       buildFilters();

@@ -2,7 +2,23 @@
 
 Carte interactive de la France recensant les **lieux abandonnés, désaffectés et en ruine** : usines, bunkers, sanatoriums, châteaux, gares, églises, maisons…
 
-Les données viennent de deux bases libres, **[OpenStreetMap](https://www.openstreetmap.org)** et **[Wikidata](https://www.wikidata.org)**, et sont mises à jour automatiquement chaque semaine.
+Les données viennent de bases libres et ouvertes, mises à jour automatiquement chaque semaine :
+
+| Source | Contenu | Licence |
+|---|---|---|
+| [OpenStreetMap](https://www.openstreetmap.org) | objets tagués abandonné, désaffecté, en ruine, bunker | ODbL |
+| [Wikidata](https://www.wikidata.org) | lieux désaffectés, abandonnés, hors service, ruines, villages fantômes | CC0 |
+| [Mérimée](https://pop.culture.gouv.fr) (ministère de la Culture) | monuments historiques en vestiges, désaffectés, menacés, en mauvais état | Licence Ouverte |
+| [Cartofriches](https://cartofriches.cerema.fr) (Cerema) | friches non reconverties et inoccupées | Licence Ouverte |
+| [CASIAS](https://www.georisques.gouv.fr) (BRGM) | anciens sites industriels à l'arrêt (usines, fonderies, filatures…) — beaucoup ont été démolis | Licence Ouverte |
+| **Communauté** | lieux proposés par les visiteurs et validés | — |
+
+Chaque source peut être affichée ou masquée dans le panneau « Sources ».
+
+## Proposer un lieu
+
+Bouton **« Proposer un lieu à la communauté »** sur la carte (ou dans la fiche d'un de tes spots perso) → formulaire GitHub.
+Le propriétaire du dépôt relit la proposition puis pose le label **`validé`** : le lieu est ajouté automatiquement à la carte et l'issue est fermée.
 
 🌐 **Voir la carte : <https://maylo083.github.io/urbex-map-france/>**
 
@@ -30,6 +46,7 @@ Puis ouvre <http://localhost:8000>.
 
 ```bash
 python scripts/fetch_wikidata.py   # rapide (~1 min)
+python scripts/fetch_opendata.py   # Mérimée + Cartofriches + CASIAS (~200 Mo à télécharger)
 python scripts/fetch_spots.py      # OpenStreetMap, plus long ; reprend où il s'est arrêté si les serveurs saturent
 ```
 
@@ -64,6 +81,6 @@ Ce projet est un outil cartographique ; tu restes seul responsable de l'usage qu
 ## Licences
 
 - Code : [MIT](LICENSE)
-- Données : © contributeurs OpenStreetMap, sous licence [ODbL](https://opendatacommons.org/licenses/odbl/) ; Wikidata ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)) ; photos Wikimedia Commons (licence propre à chaque photo)
+- Données : © contributeurs OpenStreetMap, sous licence [ODbL](https://opendatacommons.org/licenses/odbl/) ; Wikidata ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)) ; Mérimée, Cartofriches, CASIAS ([Licence Ouverte 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/)) ; photos Wikimedia Commons (licence propre à chaque photo)
 - Fonds de carte : OpenStreetMap, Esri, IGN (Géoplateforme)
 - Bibliothèques : [Leaflet](https://leafletjs.com), [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster)

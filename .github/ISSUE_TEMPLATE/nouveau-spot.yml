@@ -1,0 +1,54 @@
+name: 📍 Proposer un lieu
+description: Ajouter un lieu abandonné à la carte (il sera vérifié avant publication)
+title: "[Spot] "
+labels: ["proposition"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci ! Ta proposition sera relue avant d'apparaître sur la carte.
+        **Ne propose pas** : une maison encore habitée, un lieu dont l'accès est dangereux pour le public non averti, ni un lieu qu'un propriétaire a demandé de ne pas diffuser.
+  - type: input
+    id: nom
+    attributes:
+      label: Nom du lieu
+      placeholder: "Sanatorium de …, Usine …, Château …"
+    validations:
+      required: true
+  - type: input
+    id: coordonnees
+    attributes:
+      label: Coordonnées GPS
+      description: "Format « latitude, longitude » (ex. 45.12345, 4.56789). Astuce : clic droit sur Google Maps → copier les coordonnées."
+      placeholder: "45.12345, 4.56789"
+    validations:
+      required: true
+  - type: dropdown
+    id: categorie
+    attributes:
+      label: Catégorie
+      options:
+        - Industriel
+        - Militaire / bunkers
+        - Hôpitaux / sanatoriums
+        - Châteaux / manoirs
+        - Religieux
+        - Transport / gares / tunnels
+        - Hôtels / écoles / loisirs
+        - Maisons / fermes
+        - Ruines
+        - Autre
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: État du lieu, histoire, dernière visite… (pas d'indication pour entrer par effraction)
+  - type: checkboxes
+    id: regles
+    attributes:
+      label: Confirmation
+      options:
+        - label: Ce lieu n'est pas habité et je n'ai pas d'information indiquant que son propriétaire refuse sa diffusion.
+          required: true

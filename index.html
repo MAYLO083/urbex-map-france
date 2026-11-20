@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
   <aside id="panel">
@@ -25,6 +25,11 @@
       <h2>Catégories</h2>
       <div id="filters"></div>
       <label class="check"><input type="checkbox" id="named-only"> Seulement les lieux nommés</label>
+
+      <h2>Sources</h2>
+      <div id="sources"></div>
+
+      <a class="button propose" href="https://github.com/MAYLO083/urbex-map-france/issues/new?template=nouveau-spot.yml" target="_blank" rel="noopener">📤 Proposer un lieu à la communauté</a>
 
       <h2>Mes spots</h2>
       <p class="hint">Clic droit (ou appui long) sur la carte pour ajouter un spot perso. Ils sont enregistrés dans ton navigateur.</p>
@@ -57,6 +62,6 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/app.js?v=2"></script>
 </body>
 </html>

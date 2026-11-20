@@ -20,6 +20,9 @@ jobs:
       - name: Télécharger les données Wikidata
         run: python scripts/fetch_wikidata.py
         continue-on-error: true
+      - name: Télécharger Mérimée, Cartofriches et CASIAS
+        run: python scripts/fetch_opendata.py --fresh
+        continue-on-error: true
       - name: Télécharger les données OpenStreetMap
         run: python scripts/fetch_spots.py
         continue-on-error: true

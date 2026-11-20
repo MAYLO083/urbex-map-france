@@ -164,19 +164,21 @@
   const spotPopup = (s) => {
     const cat = CATEGORIES[s[3]] || CATEGORIES.autre;
     const src = SOURCES[s._src];
-    const [href, text] = src.link(s[5]);
+    const refs = [[s._src, s[5]], ...(s._also || [])];
+    const srcTags = [...new Set(refs.map(([k]) => SOURCES[k].label))].map((l) => `<span class="tag src">${l}</span>`).join("");
+    const links = refs.map(([k, id]) => { const [href, text] = SOURCES[k].link(id); return `<a class="src-link" target="_blank" rel="noopener" href="${href}">${text} ${ICONS.ext}</a>`; }).join("");
     const img = s[6]
       ? `<a target="_blank" rel="noopener" href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(s[6])}"><img class="pop-img" src="https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(s[6])}?width=600" alt="" loading="lazy"></a>`
       : `<div class="pop-band"></div>`;
     return `<div style="--c:${cat.color}">
       ${img}
       <div class="pop-body">
-        <div class="pop-tags"><span class="tag cat">${cat.icon} ${cat.label}</span><span class="tag src">${src.label}</span></div>
+        <div class="pop-tags"><span class="tag cat">${cat.icon} ${cat.label}</span>${srcTags}</div>
         <h3>${esc(s[2] || "Lieu sans nom")}</h3>
         ${s[4] ? `<p class="pop-desc">${esc(s[4])}</p>` : ""}
         ${coordsBtn(s[0], s[1])}
         ${actionsHtml(s[0], s[1])}
-        <a class="src-link" target="_blank" rel="noopener" href="${href}">${text} ${ICONS.ext}</a>
+        <div class="src-links">${links}</div>
       </div>
     </div>`;
   };
@@ -198,7 +200,8 @@
     navigator.clipboard?.writeText(b.dataset.copy).then(() => toast("Coordonnées copiées"), () => toast(b.dataset.copy));
   });
 
-  const visible = (s) => active.has(s[3]) && activeSources.has(s._src) && (!namedOnly || s[2]);
+  const inSources = (s) => activeSources.has(s._src) || (s._also || []).some(([k]) => activeSources.has(k));
+  const visible = (s) => active.has(s[3]) && inSources(s) && (!namedOnly || s[2]);
 
   const refresh = () => {
     cluster.clearLayers();
@@ -240,7 +243,9 @@
 
   const buildSourceFilters = () => {
     const counts = {};
-    for (const s of spots) counts[s._src] = (counts[s._src] || 0) + 1;
+    for (const s of spots) {
+      for (const k of new Set([s._src, ...(s._also || []).map(([x]) => x)])) counts[k] = (counts[k] || 0) + 1;
+    }
     $("sources").innerHTML = Object.entries(SOURCES).filter(([k]) => counts[k]).map(([k, s]) => `
       <label class="src-row">
         <span class="txt"><b>${s.label}</b><small>${s.hint}</small></span>
@@ -459,8 +464,58 @@
   const dlg = $("disclaimer");
   $("show-disclaimer").onclick = () => dlg.showModal();
 
+  // ================================================================ Fusion des doublons entre sources
+  // Deux fiches de sources différentes = même lieu si elles sont à moins de 30 m, ou à moins de 100 m avec un nom proche.
+  // Dans une même source : seulement les fiches en double (même nom, moins de 30 m).
+  // On garde la fiche de la source la plus fiable et on lui rattache les autres (liens conservés).
+  const PRIORITY = ["communaute", "wikidata", "merimee", "osm", "friches", "casias"];
+  const STOP = new Set("de du des la le les et au aux en sur sous ancien ancienne anciens anciennes site friche usine lieu".split(" "));
+  const nameTokens = (n) => new Set(norm((n || "").replace(/\(.*?\)/g, " ")).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w)));
+  const similar = (a, b) => {
+    if (!a.size || !b.size) return false;
+    let common = 0;
+    for (const w of a) if (b.has(w)) common++;
+    return common / Math.min(a.size, b.size) >= 0.6;
+  };
+  const dedupe = (list) => {
+    list.sort((a, b) => PRIORITY.indexOf(a._src) - PRIORITY.indexOf(b._src));
+    const CELL = 0.0015; // ~ 120-160 m
+    const grid = new Map();
+    const kept = [];
+    let merged = 0;
+    for (const s of list) {
+      const cx = Math.floor(s[0] / CELL), cy = Math.floor(s[1] / CELL);
+      const cosLat = Math.cos((s[0] * Math.PI) / 180);
+      let twin = null, best = Infinity;
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        for (const k of grid.get(`${cx + dx},${cy + dy}`) || []) {
+          const same = k._src === s._src;
+          if (same && (!s[2] || k[2] !== s[2])) continue; // même source : seulement une fiche en double (même nom)
+          const d = Math.hypot((k[0] - s[0]) * 111320, (k[1] - s[1]) * 111320 * cosLat);
+          if (d >= best) continue;
+          if (d < 30 || (!same && d < 100 && similar((k._tok ??= nameTokens(k[2])), (s._tok ??= nameTokens(s[2]))))) { twin = k; best = d; }
+        }
+      }
+      if (twin) {
+        (twin._also ??= []).push([s._src, s[5]]);
+        if (!twin[2] && s[2]) twin[2] = s[2];
+        if (!twin[6] && s[6]) twin[6] = s[6];
+        if (!twin[4] && s[4]) twin[4] = s[4];
+        if (twin[3] === "autre" && s[3] !== "autre") twin[3] = s[3];
+        merged++;
+        continue;
+      }
+      const key = `${cx},${cy}`;
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(s);
+      kept.push(s);
+    }
+    for (const s of kept) delete s._tok;
+    return { kept, merged };
+  };
+
   // ================================================================ Chargement
-  const load = (url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const load =(url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   const keys = Object.keys(SOURCES);
   Promise.all(keys.map((k) => load(SOURCES[k].file)))
     .then((all) => {
@@ -471,13 +526,16 @@
         for (const s of data.spots) { s._src = keys[i]; spots.push(s); }
       });
       if (!spots.length) throw new Error("aucune donnée");
+      const { kept, merged } = dedupe(spots);
+      spots = kept;
+      window.__merged = merged;
       $("splash-sub").textContent = `${fmt(spots.length)} lieux trouvés`;
       markers = spots.map(makeMarker);
       normNames = spots.map((s) => (s[2] ? norm(s[2]) : ""));
       buildFilters();
       buildSourceFilters();
       refresh();
-      if (generated) $("updated-line").textContent = `Données mises à jour le ${new Date(generated).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}.`;
+      if (generated) $("updated-line").textContent = `Données mises à jour le ${new Date(generated).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}. ${fmt(merged)} doublons fusionnés entre les sources.`;
     })
     .catch(() => { toast("Impossible de charger les lieux"); })
     .finally(() => {

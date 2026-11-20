@@ -281,7 +281,8 @@ body.collapsed #panel .search { margin-bottom: 14px; }
 }
 .act:hover { background: var(--card-hover); color: var(--accent-2) !important; }
 .act svg { width: 19px; height: 19px; }
-.src-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 12px; font-size: 12px; font-weight: 600; text-decoration: none; }
+.src-links { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 12px; }
+.src-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; text-decoration: none; }
 .src-link:hover { text-decoration: underline; }
 
 .pop-form input, .pop-form textarea {
@@ -346,3 +347,4 @@ dialog .btn { width: 100%; height: 46px; font-size: 14px; }
   #toast { bottom: calc(165px + var(--safe-bottom)); }
   .leaflet-popup-content { width: 270px !important; }
 }
+.pop-form > .src-link { margin-top: 12px; }

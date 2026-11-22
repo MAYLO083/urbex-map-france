@@ -18,7 +18,11 @@ Chaque source peut être affichée ou masquée dans le panneau « Sources ».
 ## Proposer un lieu
 
 Bouton **« Proposer un lieu à la communauté »** sur la carte (ou dans la fiche d'un de tes spots perso) → formulaire GitHub.
-Le propriétaire du dépôt relit la proposition puis pose le label **`validé`** : le lieu est ajouté automatiquement à la carte et l'issue est fermée.
+**Seul le propriétaire du dépôt modère** :
+- il relit la proposition puis pose le label **`validé`** → le lieu est ajouté à la carte, l'issue est fermée et un commentaire récapitule exactement ce qui a été publié ;
+- s'il retire le label **`validé`** → le lieu est retiré de la carte.
+
+Un label posé par quelqu'un d'autre que le propriétaire est ignoré. Les spots perso et l'import restent, eux, uniquement dans le navigateur de chaque visiteur.
 
 🌐 **Voir la carte : <https://maylo083.github.io/urbex-map-france/>**
 

@@ -1,10 +1,12 @@
-name: Ajouter un lieu proposé
+name: Lieux proposés (modération)
 
-# Se déclenche quand le label « validé » est posé sur une issue.
-# Seuls les membres du dépôt peuvent poser des labels : c'est la modération.
+# Seul le propriétaire du dépôt modère :
+#  - label « validé » posé  → le lieu est ajouté à la carte et l'issue est fermée
+#  - label « validé » retiré → le lieu est retiré de la carte
+# Un label posé par quelqu'un d'autre que le propriétaire est ignoré.
 on:
   issues:
-    types: [labeled]
+    types: [labeled, unlabeled]
 
 permissions:
   contents: write
@@ -15,31 +17,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  add:
-    if: github.event.label.name == 'validé'
+  moderate:
+    if: >-
+      github.event.label.name == 'validé' &&
+      github.event.sender.login == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Ajouter le lieu
-        id: add
+      - name: Mettre à jour la liste des lieux
+        id: spot
         env:
+          ACTION: ${{ github.event.action == 'labeled' && 'add' || 'remove' }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_BODY: ${{ github.event.issue.body }}
-        run: python scripts/add_community_spot.py
+        run: python scripts/add_community_spot.py >> "$GITHUB_OUTPUT"
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/spots_communaute.json
-          git diff --cached --quiet || git commit -m "Ajout du lieu proposé dans #${{ github.event.issue.number }}"
+          git diff --cached --quiet || git commit -m "Lieu de la communauté : ${{ github.event.action == 'labeled' && 'ajout' || 'retrait' }} (#${{ github.event.issue.number }})"
+          git pull --rebase -q
           git push
-      - name: Répondre et fermer l'issue
+      - name: Répondre sur l'issue
         env:
           GH_TOKEN: ${{ github.token }}
+          SUMMARY: ${{ steps.spot.outputs.summary }}
         run: |
-          gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} \
-            --body "✅ Merci ! Le lieu est ajouté à la carte (visible d'ici quelques minutes)."
-          gh issue close ${{ github.event.issue.number }} --repo ${{ github.repository }}
+          if [ "${{ github.event.action }}" = "labeled" ]; then
+            printf '✅ Ajouté à la carte (visible d'"'"'ici quelques minutes) :\n\n%s\n\nPour le retirer : enlève le label `validé`.' "$SUMMARY" > body.md
+            gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body-file body.md
+            gh issue close ${{ github.event.issue.number }} --repo ${{ github.repository }}
+          else
+            gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "🗑️ Lieu retiré de la carte."
+          fi

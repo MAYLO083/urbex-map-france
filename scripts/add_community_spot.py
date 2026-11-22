@@ -4,8 +4,8 @@ Ajoute à data/spots_communaute.json le lieu décrit dans une issue GitHub
 (formulaire .github/ISSUE_TEMPLATE/nouveau-spot.yml).
 
 Appelé par le workflow add-community-spot.yml quand le propriétaire du dépôt
-pose le label « validé » sur l'issue. Variables d'environnement :
-ISSUE_NUMBER, ISSUE_BODY.
+pose (ACTION=add) ou retire (ACTION=remove) le label « validé » sur l'issue.
+Variables d'environnement : ACTION, ISSUE_NUMBER, ISSUE_BODY.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -37,8 +38,36 @@ def parse(body: str) -> dict:
     return out
 
 
+def load() -> dict:
+    if OUT.exists():
+        return json.loads(OUT.read_text(encoding="utf-8"))
+    return {"fields": ["lat", "lon", "name", "category", "description", "id"], "spots": []}
+
+
+def save(data: dict) -> None:
+    data["generated"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    data["source"] = "Propositions de la communauté (issues GitHub validées)"
+    OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+
+
+def output(summary: str) -> None:
+    """Écrit le résumé au format GITHUB_OUTPUT (sortie standard redirigée par le workflow)."""
+    delim = "EOF_" + secrets.token_hex(8)
+    print(f"summary<<{delim}\n{summary}\n{delim}")
+
+
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
     number = int(os.environ["ISSUE_NUMBER"])
+    sid = f"U{number}"
+
+    if os.environ.get("ACTION") == "remove":
+        data = load()
+        data["spots"] = [s for s in data["spots"] if s[5] != sid]
+        save(data)
+        output(f"Lieu #{number} retiré.")
+        return
+
     f = parse(os.environ["ISSUE_BODY"])
 
     m = re.search(r"(-?\d{1,2}[.,]\d+)\s*[,; ]\s*(-?\d{1,3}[.,]\d+)", f.get("coordonnées gps", ""))
@@ -48,20 +77,18 @@ def main() -> None:
     if not (41 <= lat <= 51.5 and -5.5 <= lon <= 10):
         sys.exit(f"Coordonnées hors de France : {lat}, {lon}")
 
-    name = f.get("nom du lieu", "").strip()[:120] or "Lieu proposé"
+    name = re.sub(r"\s+", " ", f.get("nom du lieu", "")).strip()[:120] or "Lieu proposé"
     cat = CATEGORIES.get(f.get("catégorie", "").strip().lower(), "autre")
     desc = re.sub(r"\s+", " ", f.get("description", "")).strip()[:300]
 
-    data = {"fields": ["lat", "lon", "name", "category", "description", "id"], "spots": []}
-    if OUT.exists():
-        data = json.loads(OUT.read_text(encoding="utf-8"))
-    sid = f"U{number}"
+    data = load()
     data["spots"] = [s for s in data["spots"] if s[5] != sid]  # mise à jour si re-validé
     data["spots"].append([round(lat, 5), round(lon, 5), name, cat, desc, sid])
-    data["generated"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    data["source"] = "Propositions de la communauté (issues GitHub validées)"
-    OUT.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"Ajouté : {name} ({lat}, {lon}) [{cat}]")
+    save(data)
+    # Récapitulatif de ce qui a réellement été publié (au cas où l'issue aurait été modifiée)
+    output(f"- **Nom** : {name}\n- **Position** : {lat:.5f}, {lon:.5f} "
+           f"([voir](https://www.openstreetmap.org/?mlat={lat:.5f}&mlon={lon:.5f}#map=17/{lat:.5f}/{lon:.5f}))\n"
+           f"- **Catégorie** : {cat}" + (f"\n- **Description** : {desc}" if desc else ""))
 
 
 if __name__ == "__main__":

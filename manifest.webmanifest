@@ -1,7 +1,7 @@
 {
-  "name": "Urbex Map France",
+  "name": "Urbex Map",
   "short_name": "Urbex Map",
-  "description": "Carte des lieux abandonnés, désaffectés et en ruine de France",
+  "description": "Carte des lieux abandonnés, désaffectés et en ruine du monde entier",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",

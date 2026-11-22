@@ -1,4 +1,4 @@
-/* Urbex Map France — carte des lieux abandonnés de France */
+/* Urbex Map — carte des lieux abandonnés du monde entier */
 (() => {
   "use strict";
 
@@ -48,7 +48,8 @@
   };
 
   // ================================================================ Carte
-  const map = L.map("map", { preferCanvas: true, zoomControl: false, minZoom: 4, attributionControl: true });
+  const map = L.map("map", { preferCanvas: true, zoomControl: false, minZoom: 2, attributionControl: true,
+    maxBounds: [[-85, -200], [85, 200]], maxBoundsViscosity: 0.8 });
   const renderer = L.canvas({ padding: 0.5 });
   map.attributionControl.setPrefix(false);
 
@@ -81,7 +82,7 @@
   };
   L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
 
-  // Position (#zoom/lat/lon) ou France entière
+  // Position (#zoom/lat/lon) ou France entière par défaut
   const m0 = location.hash.match(/^#(\d+(?:\.\d+)?)\/(-?\d+\.\d+)\/(-?\d+\.\d+)/);
   if (m0) map.setView([+m0[2], +m0[3]], +m0[1]);
   else map.fitBounds([[41.3, -5.2], [51.1, 9.6]], { paddingTopLeft: isMobile() ? [0, 0] : [390, 0] });
@@ -130,7 +131,9 @@
   // ================================================================ État
   // Les lieux sont découpés en cases de 0,5° (data/tiles/c/*.json) : on ne charge que celles qu'on regarde.
   let meta = null;            // data/tiles/meta.json : version, totaux
-  let cells = [];             // data/tiles/overview.json : une bulle par case de 1° (vue dézoomée)
+  let worldCells = [];        // data/tiles/overview.json : une bulle par case de 4° (vue du monde)
+  const chunks = new Map();   // data/tiles/o/*.json : bulles de 1° par carrés de 10° (vue régionale)
+  let ovMode = null;          // "world" | "region" : bulles affichées
   const tileExists = new Set();
   const tiles = new Map();    // case → { items: [[lieu, marqueur]], ready, used }
   const shown = new Set();    // cases dont les marqueurs sont sur la carte
@@ -165,13 +168,14 @@
     iconCreateFunction: (c) => bubble(c.getAllChildMarkers().reduce((t, m) => t + m.options.count, 0)),
   });
 
+  const inFrance = (lat, lon) => lat > 41 && lat < 51.5 && lon > -5.5 && lon < 10;
   const coordsBtn = (lat, lon) =>
     `<button class="coords" data-copy="${lat.toFixed(5)}, ${lon.toFixed(5)}"><span>${lat.toFixed(5)}, ${lon.toFixed(5)}</span><em>Copier</em></button>`;
   const actionsHtml = (lat, lon) => `
     <div class="actions">
       <a class="act" target="_blank" rel="noopener" href="https://www.google.com/maps/@?api=1&map_action=map&center=${lat},${lon}&zoom=18&basemap=satellite">${ICONS.sat}Satellite</a>
       <a class="act" target="_blank" rel="noopener" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}">${ICONS.eye}Street View</a>
-      <a class="act" target="_blank" rel="noopener" href="https://remonterletemps.ign.fr/comparer?lon=${lon}&lat=${lat}&z=17">${ICONS.time}Avant / après</a>
+      ${inFrance(lat, lon) ? `<a class="act" target="_blank" rel="noopener" href="https://remonterletemps.ign.fr/comparer?lon=${lon}&lat=${lat}&z=17">${ICONS.time}Avant / après</a>` : ""}
       <a class="act" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}">${ICONS.go}Y aller</a>
     </div>`;
 
@@ -228,12 +232,14 @@
 
   const renderOverview = () => {
     overviewLayer.clearLayers();
+    if (!ovMode) return;
+    const list = ovMode === "world" ? worldCells : [...chunks.values()].flatMap((c) => c.cells || []);
     const ms = [];
-    for (const cell of cells) {
+    for (const cell of list) {
       const n = sumCounts(cell.n);
       if (!n) continue;
       const m = L.marker(cell.c, { icon: bubble(n), count: n });
-      m.on("click", () => map.setView(cell.c, 10));
+      m.on("click", () => map.setView(cell.c, ovMode === "world" ? Math.max(map.getZoom() + 2, 6) : 10));
       ms.push(m);
     }
     overviewLayer.addLayers(ms);
@@ -304,12 +310,33 @@
 
   // ================================================================ Recherche
   const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  // Index des noms : chargé seulement la première fois qu'on cherche
-  let searchIndex = null, searchLoading = null, lastFound = [];
-  const loadSearch = () => (searchLoading ??= fetch(`data/tiles/search.json?v=${meta ? meta.v : ""}`)
-    .then((r) => r.json())
-    .then((rows) => { searchIndex = rows.map((r) => [r, norm(r[2])]); })
-    .catch(() => { searchLoading = null; }));
+  // Index des noms découpé selon le début des mots (data/tiles/s/*.json) :
+  // on ne télécharge que le morceau du mot le plus long tapé (même règle que build_tiles.py).
+  const COMMON = new Set(("de du des la le les et au aux en sur sous ancien ancienne anciens anciennes site friche usine lieu " +
+    "the of and old former der die das und alte ehemalige del di da do dos el saint sainte rue chemin route avenue dit pour " +
+    "avec sans station service garage atelier societe ets etablissements entreprise").split(" "));
+  const chars = (w) => Array.from(w);
+  const safe = (p) => chars(p).map((c) => (/[a-z0-9_]/.test(c) ? c : "~" + c.codePointAt(0).toString(16) + ".")).join("");
+  const shardKey = (w) => {
+    const cs = chars(w), split = new Set(meta.split);
+    let n = 3, p = cs.slice(0, n).join("");
+    while (split.has(p)) {
+      if (cs.length > n) p = cs.slice(0, ++n).join("");
+      else { p = w + "_"; break; }
+    }
+    return p;
+  };
+  const shards = new Map();
+  const loadShard = (p) => {
+    if (!shards.has(p)) {
+      shards.set(p, fetch(`data/tiles/s/${safe(p)}.json?v=${meta.v}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows) => rows.map((r) => [r, norm(r[2])]))
+        .catch(() => { shards.delete(p); return null; }));
+    }
+    return shards.get(p);
+  };
+  let lastFound = [];
   const results = $("results");
   let searchTimer;
   $("search").addEventListener("input", (e) => {
@@ -317,25 +344,31 @@
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => runSearch(e.target.value), 120);
   });
-  $("search").addEventListener("focus", () => { loadSearch(); if (isMobile()) openSheet(true); });
+  $("search").addEventListener("focus", () => { if (isMobile()) openSheet(true); });
   $("search-clear").onclick = () => { $("search").value = ""; $("search-clear").hidden = true; results.innerHTML = ""; $("search").focus(); };
 
-  const runSearch = (raw) => {
+  let searchSeq = 0;
+  const runSearch = async (raw) => {
+    const seq = ++searchSeq;
     const q = norm(raw.trim());
     results.innerHTML = "";
     if (q.length < 2) return;
-    const words = q.split(/\s+/);
+    const words = q.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
     const mineFound = mine.filter((m) => words.every((w) => norm(m.name || "").includes(w)));
-    if (!searchIndex) {
-      results.innerHTML = `<li class="none">Chargement de l'index…</li>`;
-      loadSearch().then(() => { if (searchIndex) runSearch($("search").value); });
-      return;
-    }
     lastFound = [];
-    for (const [r, n] of searchIndex) {
-      if (words.every((w) => n.includes(w))) { lastFound.push(r); if (lastFound.length >= 50) break; }
-    }
-    if (!mineFound.length && !lastFound.length) { results.innerHTML = `<li class="none">Aucun lieu trouvé</li>`; return; }
+    const key = words.filter((w) => chars(w).length >= 3 && !COMMON.has(w)).sort((a, b) => chars(b).length - chars(a).length)[0];
+    let note = "";
+    if (key && meta) {
+      results.innerHTML = `<li class="none">Recherche…</li>`;
+      const rows = await loadShard(shardKey(key));
+      if (seq !== searchSeq) return;
+      if (rows === null) note = "Recherche impossible, vérifie ta connexion";
+      for (const [r, n] of rows || []) {
+        if (words.every((w) => n.includes(w))) { lastFound.push(r); if (lastFound.length >= 50) break; }
+      }
+    } else if (!mineFound.length) note = "Tape un mot d'au moins 3 lettres (ex. sanatorium, Beelitz…)";
+    results.innerHTML = "";
+    if (!mineFound.length && !lastFound.length) { results.innerHTML = `<li class="none">${note || "Aucun lieu trouvé"}</li>`; return; }
     results.innerHTML = mineFound.map((f) => `<li tabindex="0" data-m="${f.id}"><span class="ico" style="background:#ff3d0022">📌</span>
         <span class="txt"><b>${esc(f.name)}</b><small>Mon spot</small></span></li>`).join("") +
       lastFound.map((r, i) => {
@@ -537,6 +570,28 @@
     return entry.ready;
   };
 
+  // Carrés de 10° de la vue régionale (bulles de 1° + liste des cases existantes)
+  const chunkKeys = (b) => {
+    const c = meta.chunk, out = [], exist = new Set(meta.chunks);
+    for (let y = Math.floor(Math.max(-90, b.getSouth()) / c); y <= Math.floor(Math.min(89.9, b.getNorth()) / c); y++) {
+      for (let x = Math.floor(Math.max(-180, b.getWest()) / c); x <= Math.floor(Math.min(179.9, b.getEast()) / c); x++) {
+        if (exist.has(`${y}_${x}`)) out.push(`${y}_${x}`);
+      }
+    }
+    return out;
+  };
+  const loadChunk = (k) => {
+    if (!chunks.has(k)) {
+      const entry = { cells: null };
+      entry.ready = fetch(`data/tiles/o/${k}.json?v=${meta.v}`)
+        .then((r) => r.json())
+        .then((cells) => { entry.cells = cells; for (const c of cells) for (const t of c.t) tileExists.add(t); })
+        .catch(() => { chunks.delete(k); });
+      chunks.set(k, entry);
+    }
+    return chunks.get(k).ready;
+  };
+
   // Cases visibles (avec une petite marge) ; null = trop de cases → vue dézoomée
   const neededTiles = () => {
     const z = map.getZoom();
@@ -562,17 +617,22 @@
   };
 
   let viewSeq = 0;
+  const showOverview = (mode) => {
+    if (map.hasLayer(cluster)) map.removeLayer(cluster);
+    if (ovMode !== mode || mode === "region") { ovMode = mode; renderOverview(); }
+    if (!map.hasLayer(overviewLayer)) map.addLayer(overviewLayer);
+  };
   const updateView = async () => {
     if (!meta) return;
+    const seq = ++viewSeq;
+    if (map.getZoom() < 5) return showOverview("world");
+    const fresh = chunkKeys(map.getBounds().pad(0.15)).filter((k) => !chunks.has(k) || !chunks.get(k).cells);
+    if (fresh.length) { setLoading(1); await Promise.all(fresh.map(loadChunk)); setLoading(-1); }
+    if (seq !== viewSeq) return;
     const need = neededTiles();
-    if (!need) {
-      if (map.hasLayer(cluster)) map.removeLayer(cluster);
-      if (!map.hasLayer(overviewLayer)) map.addLayer(overviewLayer);
-      return;
-    }
+    if (!need) return showOverview("region");
     if (map.hasLayer(overviewLayer)) map.removeLayer(overviewLayer);
     if (!map.hasLayer(cluster)) map.addLayer(cluster);
-    const seq = ++viewSeq;
     await Promise.all(need.map(loadTile));
     if (seq !== viewSeq) return; // la carte a bougé entre-temps : une vue plus récente s'en occupe
     const needSet = new Set(need), add = [], rem = [];
@@ -601,8 +661,7 @@
   (async () => {
     try {
       meta = await fetch(`data/tiles/meta.json?t=${Date.now()}`).then((r) => r.json());
-      cells = await fetch(`data/tiles/overview.json?v=${meta.v}`).then((r) => r.json());
-      for (const c of cells) for (const t of c.t) tileExists.add(t);
+      worldCells = await fetch(`data/tiles/overview.json?v=${meta.v}`).then((r) => r.json());
       $("splash-sub").textContent = `${fmt(meta.count)} lieux`;
       buildFilters();
       buildSourceFilters();

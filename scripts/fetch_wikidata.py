@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-Récupère depuis Wikidata (données CC0) les lieux de France marqués
+Récupère depuis Wikidata (données CC0) les lieux du monde entier marqués
 désaffectés, abandonnés, hors service, en ruine, ainsi que les ruines
 et villages fantômes. Génère data/spots_wikidata.json.
+
+Les requêtes sont découpées en bandes de longitude (redécoupées en deux
+automatiquement si Wikidata met trop de temps à répondre).
 
 Usage :
     python scripts/fetch_wikidata.py
@@ -24,7 +27,7 @@ from fetch_spots import categorize  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "spots_wikidata.json"
 ENDPOINT = "https://query.wikidata.org/sparql"
-UA = "urbex-map-france/1.0 (open-source map project)"
+UA = "urbex-map/1.0 (open-source map project)"
 
 STATES = {
     "Q11639308": "désaffecté",
@@ -45,15 +48,18 @@ EXCLUDE_TYPES = (
     "people mover", "light rail", "railway network", "rapid transit",
 )
 
-# Une requête légère par valeur ; ?state est fixé par BIND.
+# Une requête légère par valeur et par bande de longitude.
+BANDS = [(-180, -30), (-30, 0), (0, 10), (10, 20), (20, 40), (40, 180)]
 QUERY = """
 SELECT ?i ?iLabel ?coord ?type ?img WHERE {
   %s
-  ?i wdt:P17 wd:Q142; wdt:P625 ?coord.
+  ?i wdt:P625 ?coord.
+  BIND(geof:longitude(?coord) AS ?lon)
+  FILTER(?lon >= %s && ?lon < %s)
   FILTER NOT EXISTS { ?i wdt:P5817 wd:Q56556915 }
   OPTIONAL { ?i wdt:P31 ?type. }
   OPTIONAL { ?i wdt:P18 ?img. }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "fr,en". }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "fr,en,mul,de,es,it,pt,nl,pl,ru,ja,zh". }
 }
 """
 LABELS_QUERY = """
@@ -65,9 +71,9 @@ SELECT ?t ?en ?fr WHERE {
 """
 
 
-def sparql(query: str) -> list:
+def sparql(query: str, tries: int = 6) -> list | None:
     data = urllib.parse.urlencode({"query": query, "format": "json"}).encode()
-    for attempt in range(6):
+    for attempt in range(tries):
         try:
             req = urllib.request.Request(ENDPOINT, data=data, headers={
                 "User-Agent": UA, "Accept": "application/sparql-results+json",
@@ -78,14 +84,29 @@ def sparql(query: str) -> list:
             wait = 20 * (attempt + 1)
             print(f"  échec : {e} — nouvel essai dans {wait}s", flush=True)
             time.sleep(wait)
-    raise SystemExit("Impossible d'interroger Wikidata, réessaie plus tard.")
+    if tries > 2:
+        raise SystemExit("Impossible d'interroger Wikidata, réessaie plus tard.")
+    return None
+
+
+def band(clause: str, lo: float, hi: float) -> list:
+    """Une bande de longitude ; si Wikidata n'y arrive pas, on la coupe en deux."""
+    res = sparql(QUERY % (clause, lo, hi), tries=2 if hi - lo > 1 else 6)
+    if res is None:
+        mid = (lo + hi) / 2
+        print(f"    bande {lo}…{hi} trop lourde, découpée en deux", flush=True)
+        return band(clause, lo, mid) + band(clause, mid, hi)
+    return res
 
 
 def fetch() -> list:
     rows = []
     jobs = [(q, f"?i wdt:P5817 wd:{q}.") for q in STATES] + [(q, f"?i wdt:P31 wd:{q}.") for q in TYPES]
     for q, clause in jobs:
-        res = sparql(QUERY % clause)
+        res = []
+        for lo, hi in BANDS:
+            res += band(clause, lo, hi)
+            time.sleep(1)
         for b in res:
             b["state"] = {"value": q}
         print(f"  {STATES.get(q) or TYPES.get(q):22s} → {len(res)} lignes", flush=True)
@@ -125,8 +146,6 @@ def main() -> None:
         if not coord.startswith("Point("):
             continue
         lon, lat = map(float, coord[6:-1].split())
-        if not (41.3 <= lat <= 51.2 and -5.3 <= lon <= 9.7):  # métropole + Corse
-            continue
         it = items.setdefault(qid, {"lat": lat, "lon": lon, "name": b["iLabel"]["value"],
                                     "en": set(), "fr": set(), "img": "", "state": set()})
         if "typeEn" in b:

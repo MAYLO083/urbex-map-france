@@ -1,16 +1,16 @@
-# 🏚️ Urbex Map France
+# 🏚️ Urbex Map
 
-Carte interactive de la France recensant les **lieux abandonnés, désaffectés et en ruine** : usines, bunkers, sanatoriums, châteaux, gares, églises, maisons…
+Carte interactive du **monde entier** recensant les **lieux abandonnés, désaffectés et en ruine** : usines, bunkers, sanatoriums, châteaux, gares, églises, maisons…
 
 Les données viennent de bases libres et ouvertes, mises à jour automatiquement chaque semaine :
 
 | Source | Contenu | Licence |
 |---|---|---|
-| [OpenStreetMap](https://www.openstreetmap.org) | objets tagués abandonné, désaffecté, en ruine, bunker | ODbL |
-| [Wikidata](https://www.wikidata.org) | lieux désaffectés, abandonnés, hors service, ruines, villages fantômes | CC0 |
-| [Mérimée](https://pop.culture.gouv.fr) (ministère de la Culture) | monuments historiques en vestiges, désaffectés, menacés, en mauvais état | Licence Ouverte |
-| [Cartofriches](https://cartofriches.cerema.fr) (Cerema) | friches non reconverties et inoccupées | Licence Ouverte |
-| [CASIAS](https://www.georisques.gouv.fr) (BRGM) | anciens sites industriels à l'arrêt (usines, fonderies, filatures…) — beaucoup ont été démolis | Licence Ouverte |
+| [OpenStreetMap](https://www.openstreetmap.org) | 🌍 monde entier : objets tagués abandonné, désaffecté, en ruine, bunker | ODbL |
+| [Wikidata](https://www.wikidata.org) | 🌍 monde entier : lieux désaffectés, abandonnés, hors service, ruines, villages fantômes | CC0 |
+| 🇫🇷 [Mérimée](https://pop.culture.gouv.fr) (ministère de la Culture) | monuments historiques en vestiges, désaffectés, menacés, en mauvais état | Licence Ouverte |
+| 🇫🇷 [Cartofriches](https://cartofriches.cerema.fr) (Cerema) | friches non reconverties et inoccupées | Licence Ouverte |
+| 🇫🇷 [CASIAS](https://www.georisques.gouv.fr) (BRGM) | anciens sites industriels à l'arrêt (usines, fonderies, filatures…) — beaucoup ont été démolis | Licence Ouverte |
 | **Communauté** | lieux proposés par les visiteurs et validés | — |
 
 Chaque source peut être affichée ou masquée dans le panneau « Sources ».
@@ -28,17 +28,17 @@ Un label posé par quelqu'un d'autre que le propriétaire est ignoré. Les spots
 
 ## Fonctionnalités
 
-- 🗺️ Carte de toute la France avec regroupement des points (clusters)
+- 🗺️ Carte du monde entier avec regroupement des points (clusters)
 - 🏭 Filtres par catégorie : industriel, militaire, hôpitaux, châteaux, religieux, transport, loisirs, habitations, ruines
-- 🔍 Recherche par nom (sans accents ni majuscules)
+- 🔍 Recherche par nom (sans accents ni majuscules, tous alphabets)
 - 🛰️ Fonds de carte : plan, satellite, photo aérienne IGN actuelle **et des années 1950-1965**
-- 🔗 Pour chaque lieu : liens Google Satellite, Street View, *Remonter le temps* (IGN), itinéraire, fiche OSM
+- 🔗 Pour chaque lieu : liens Google Satellite, Street View, *Remonter le temps* (IGN, en France), itinéraire, fiche OSM
 - 📍 **Mes spots** : clic droit sur la carte pour ajouter tes propres lieux avec notes (stockés dans ton navigateur), export / import en GeoJSON
 - 📱 Fonctionne sur mobile, géolocalisation
 
 ## Utilisation en local
 
-Le site est 100 % statique (HTML/CSS/JS), mais il doit être servi par un petit serveur web pour pouvoir charger `data/spots.json` :
+Le site est 100 % statique (HTML/CSS/JS), mais il doit être servi par un petit serveur web. Il faut d'abord préparer les tuiles (`python scripts/build_tiles.py`, voir plus bas) :
 
 ```bash
 python -m http.server 8000
@@ -50,37 +50,45 @@ Puis ouvre <http://localhost:8000>.
 
 Le site ne télécharge pas tous les lieux d'un coup. `scripts/build_tiles.py` prépare les données dans `data/tiles/` :
 
-- `meta.json` + `overview.json` (~10 Ko) : chargés à l'ouverture, ils affichent les bulles par région ;
+- `meta.json` + `overview.json` : chargés à l'ouverture, ils affichent les bulles du monde (cases de 4°) ;
+- `o/<carré>.json` : bulles par case de 1°, par carrés de 10°, chargées quand on zoome sur une région ;
 - `c/<case>.json` : les lieux d'une case de 0,5° × 0,5°, chargés seulement quand on regarde cette zone ;
-- `search.json` : l'index des noms, chargé seulement quand on utilise la recherche.
+- `s/<début>.json` : l'index de recherche, découpé selon le début des mots (on ne télécharge que le morceau du mot tapé).
 
-La fusion des doublons entre sources est faite à ce moment-là, une fois pour toutes. Ce découpage permet d'ajouter d'autres pays sans ralentir l'ouverture.
+La fusion des doublons entre sources est faite à ce moment-là, une fois pour toutes.
 
-## Mettre à jour les données
+## Où sont les données ?
+
+Pour que le dépôt ne grossisse pas à chaque mise à jour, rien de tout ça n'est enregistré dans le code :
+
+- les **sources brutes** (OpenStreetMap par région, Wikidata, Mérimée, Cartofriches, CASIAS) sont rangées dans la [Release « donnees »](https://github.com/MAYLO083/urbex-map-france/releases/tag/donnees) ;
+- les **tuiles** sont construites par GitHub Actions et publiées directement sur GitHub Pages (`.github/workflows/build-site.yml`) ;
+- seuls les **lieux de la communauté** (`data/spots_communaute.json`) sont dans le dépôt.
+
+## Mise à jour automatique
+
+`.github/workflows/update-data.yml`, chaque lundi (ou via **Actions → Mise à jour des spots → Run workflow**) :
+
+1. **OpenStreetMap, monde entier** (le premier lundi du mois, ou à la demande) : `plan_regions.py` découpe la planète en ~275 extraits Geofabrik (~84 Go), répartis en lots ; une dizaine de machines GitHub les traitent en parallèle avec `fetch_osm_extract.py` (téléchargement, filtre `osmium`, extraction, suppression) ;
+2. **Wikidata** (monde entier) et les sources françaises ;
+3. les nouvelles versions remplacent les anciennes dans la Release — une région ou une source qui échoue garde sa version précédente ;
+4. le site est reconstruit et republié.
+
+En local :
 
 ```bash
-python scripts/fetch_wikidata.py   # rapide (~1 min)
-python scripts/fetch_opendata.py   # Mérimée + Cartofriches + CASIAS (~200 Mo à télécharger)
-pip install osmium                 # puis, sous Linux : apt install osmium-tool
-python scripts/fetch_osm_extract.py   # OpenStreetMap : télécharge l'extrait officiel France (~5 Go, Geofabrik) et le filtre
-python scripts/build_tiles.py      # à lancer après : fusion des doublons + découpage en tuiles
+gh release download donnees --dir data/.dl     # sources de la dernière mise à jour
+tar -xzf data/.dl/osm.tar.gz -C data
+for f in data/.dl/spots_*.json.gz; do gunzip -c "$f" > "data/$(basename "$f" .gz)"; done
+python scripts/build_tiles.py                  # fusion des doublons + découpage en tuiles
+python -m http.server 8000
 ```
 
-`fetch_wikidata.py` récupère les lieux marqués *désaffecté*, *abandonné*, *hors service*, *en ruine*, *fermé définitivement*, les ruines et villages fantômes (données CC0, avec photo quand elle existe).
-
-`fetch_osm_extract.py` lit l'extrait officiel OpenStreetMap de la France (aucun serveur partagé, donc fiable) et réécrit `data/spots.json`. L'ancien `fetch_spots.py` (API Overpass) reste disponible mais ces serveurs sont souvent saturés.
-Sur GitHub, le workflow `.github/workflows/update-data.yml` le fait tout seul chaque lundi (ou à la demande via l'onglet **Actions → Run workflow**).
-
-## Publier sur GitHub Pages
-
-1. Crée un dépôt sur GitHub et pousse ce dossier.
-2. Dans **Settings → Pages**, choisis *Deploy from a branch*, branche `main`, dossier `/ (root)`.
-3. Dans **Settings → Actions → General**, autorise *Read and write permissions* pour que la mise à jour automatique puisse committer.
-4. Ton site est en ligne sur `https://<ton-pseudo>.github.io/<nom-du-depot>/`.
+Ou pour refaire une source : `fetch_wikidata.py`, `fetch_opendata.py` (Mérimée + Cartofriches + CASIAS), `fetch_osm_extract.py` (sans argument : la France ; sinon une liste d'URL d'extraits Geofabrik).
 
 ## Quels lieux sont inclus ?
 
-Tous les objets OSM en France portant l'un de ces tags : `abandoned=yes`, `disused=yes`, `ruins=yes`, `historic=ruins`, `building=ruins|abandoned|disused`, `abandoned:*`, `disused:*`, `military=bunker`, `building=bunker`.
+Tous les objets OSM du monde portant l'un de ces tags : `abandoned=yes`, `disused=yes`, `ruins=yes`, `historic=ruins`, `building=ruins|abandoned|disused`, `abandoned:*`, `disused:*`, `military=bunker`, `building=bunker`.
 Les objets linéaires (routes, voies ferrées, lignes électriques…) sont exclus. La catégorie est déduite automatiquement des tags et du nom ; elle peut donc parfois être approximative.
 
 **Un lieu manque ou est faux ?** Corrige-le directement sur OpenStreetMap (lien dans chaque fiche) : il apparaîtra ici à la prochaine mise à jour.

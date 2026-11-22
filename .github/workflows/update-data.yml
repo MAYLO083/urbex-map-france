@@ -1,9 +1,20 @@
 name: Mise à jour des spots
 
+# Chaque lundi : Wikidata + sources françaises.
+# Le premier lundi du mois (ou avec le bouton « Run workflow ») : aussi
+# OpenStreetMap pour le monde entier (~84 Go d'extraits Geofabrik, traités
+# en parallèle par lots sur plusieurs machines).
+# Les sources brutes sont rangées dans la Release « donnees » ; si une source ou
+# une région échoue, sa version précédente est gardée.
 on:
   schedule:
     - cron: "0 4 * * 1"   # chaque lundi à 4h UTC
-  workflow_dispatch:       # bouton "Run workflow" dans l'onglet Actions
+  workflow_dispatch:
+    inputs:
+      osm:
+        description: "Mettre aussi à jour OpenStreetMap (monde entier, ~1 h)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -13,7 +24,60 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  update:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      lots: ${{ steps.plan.outputs.lots }}
+      osm: ${{ steps.when.outputs.osm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - id: when
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "osm=${{ inputs.osm }}" >> "$GITHUB_OUTPUT"
+          elif [ "$(date -u +%-d)" -le 7 ]; then
+            echo "osm=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "osm=false" >> "$GITHUB_OUTPUT"
+          fi
+      - id: plan
+        if: steps.when.outputs.osm == 'true'
+        run: python scripts/plan_regions.py --github >> "$GITHUB_OUTPUT"
+
+  osm:
+    needs: plan
+    if: needs.plan.outputs.osm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.lots) }}
+    name: osm (lot ${{ matrix.lot }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Installer les outils OpenStreetMap
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q osmium-tool
+          pip install -q osmium
+      - name: Extraire les lieux de chaque région du lot
+        run: python scripts/fetch_osm_extract.py --outdir out ${{ matrix.urls }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: osm-${{ matrix.lot }}
+          path: out/
+          retention-days: 3
+          if-no-files-found: warn
+
+  autres:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -21,27 +85,78 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Télécharger les données Wikidata
+      - name: Wikidata (monde entier)
         run: python scripts/fetch_wikidata.py
         continue-on-error: true
-      - name: Télécharger Mérimée, Cartofriches et CASIAS
+      - name: Mérimée, Cartofriches et CASIAS (France)
         run: python scripts/fetch_opendata.py --fresh
         continue-on-error: true
-      - name: Installer les outils OpenStreetMap
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autres
+          path: |
+            data/spots_wikidata.json
+            data/spots_merimee.json
+            data/spots_friches.json
+            data/spots_casias.json
+          retention-days: 3
+          if-no-files-found: warn
+
+  ranger:
+    needs: [plan, osm, autres]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reprendre les sources précédentes
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q osmium-tool
-          pip install -q osmium
-      - name: Lieux OpenStreetMap (extrait officiel France, Geofabrik)
-        run: python scripts/fetch_osm_extract.py
+          mkdir -p data/.dl data/osm
+          gh release download donnees --repo "${{ github.repository }}" --dir data/.dl
+          tar -xzf data/.dl/osm.tar.gz -C data
+      - uses: actions/download-artifact@v4
+        if: needs.plan.outputs.osm == 'true'
+        with:
+          pattern: osm-*
+          merge-multiple: true
+          path: data/osm
+      - uses: actions/download-artifact@v4
+        with:
+          name: autres
+          path: data/new
         continue-on-error: true
-      - name: Préparer les tuiles (fusion des doublons, découpage par zone)
-        run: python scripts/build_tiles.py
-      - name: Commit si changement
+      - name: Ranger les nouvelles versions
+        env:
+          LOTS: ${{ needs.plan.outputs.lots }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A data
-          git diff --cached --quiet || git commit -m "Mise à jour automatique des spots"
-          git pull --rebase -q
-          git push
+          # Régions qui ne font plus partie du découpage actuel : supprimées
+          if [ -n "$LOTS" ]; then
+            python - <<'EOF'
+          import json, os, pathlib
+          keep = {u.split("download.geofabrik.de/", 1)[-1].replace("-latest.osm.pbf", "").replace("/", "_")
+                  for lot in json.loads(os.environ["LOTS"]) for u in lot["urls"].split()}
+          for f in pathlib.Path("data/osm").glob("*.json"):
+              if f.stem not in keep:
+                  print("retirée :", f.name)
+                  f.unlink()
+          print(len(list(pathlib.Path("data/osm").glob("*.json"))), "régions sur", len(keep))
+          EOF
+          fi
+          tar -czf data/.dl/osm.tar.gz -C data osm
+          for f in data/new/spots_*.json; do
+            [ -f "$f" ] && gzip -c "$f" > "data/.dl/$(basename "$f").gz" && echo "mis à jour : $(basename "$f")"
+          done
+          ls -la data/.dl
+      - name: Enregistrer dans la Release « donnees »
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload donnees data/.dl/* --clobber --repo "${{ github.repository }}"
+
+  publier:
+    needs: ranger
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/build-site.yml

@@ -4,3 +4,12 @@ __pycache__/
 Thumbs.db
 .claude/settings.local.json
 data/.cache/
+
+# Construit par GitHub Actions (Release « donnees » + Pages), pas versionné
+data/tiles/
+data/osm/
+data/spots_*.json
+!data/spots_communaute.json
+data/.dl/
+data/new/
+_site/

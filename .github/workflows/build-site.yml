@@ -1,0 +1,62 @@
+name: Publication du site
+
+# Construit les tuiles à partir des sources (Release « donnees » + lieux de la
+# communauté) puis publie le site sur GitHub Pages. Les tuiles ne sont pas
+# enregistrées dans le dépôt : ça évite qu'il grossisse à chaque mise à jour.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["README.md", "LICENSE", "scripts/fetch_*.py", "scripts/plan_regions.py", ".github/ISSUE_TEMPLATE/**"]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main   # inclut un lieu de la communauté validé juste avant
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Récupérer les sources (Release « donnees »)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p data/.dl
+          gh release download donnees --repo "${{ github.repository }}" --dir data/.dl
+          tar -xzf data/.dl/osm.tar.gz -C data
+          for f in data/.dl/spots_*.json.gz; do gunzip -c "$f" > "data/$(basename "$f" .gz)"; done
+          ls -la data data/osm | head -20
+          echo "$(ls data/osm | wc -l) régions OpenStreetMap"
+      - name: Préparer les tuiles (fusion des doublons, découpage par zone)
+        run: python scripts/build_tiles.py
+      - name: Assembler le site
+        run: |
+          mkdir -p _site/data
+          cp -r index.html manifest.webmanifest css js icons _site/
+          cp -r data/tiles _site/data/
+          du -sh _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

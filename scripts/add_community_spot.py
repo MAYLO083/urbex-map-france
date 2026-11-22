@@ -74,8 +74,8 @@ def main() -> None:
     if not m:
         sys.exit("Coordonnées introuvables : format attendu « 45.12345, 4.56789 »")
     lat, lon = float(m.group(1).replace(",", ".")), float(m.group(2).replace(",", "."))
-    if not (41 <= lat <= 51.5 and -5.5 <= lon <= 10):
-        sys.exit(f"Coordonnées hors de France : {lat}, {lon}")
+    if not (-85 <= lat <= 85 and -180 <= lon <= 180) or (lat == 0 and lon == 0):
+        sys.exit(f"Coordonnées invalides : {lat}, {lon}")
 
     name = re.sub(r"\s+", " ", f.get("nom du lieu", "")).strip()[:120] or "Lieu proposé"
     cat = CATEGORIES.get(f.get("catégorie", "").strip().lower(), "autre")

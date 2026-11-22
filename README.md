@@ -84,6 +84,14 @@ python scripts/build_tiles.py                  # fusion des doublons + découpag
 python -m http.server 8000
 ```
 
+**CASIAS depuis GitHub :** le pare-feu du BRGM refuse les machines de GitHub Actions (« Request Rejected »). La version rangée dans la Release est donc gardée telle quelle. C'est un inventaire historique qui bouge très peu. Pour la rafraîchir depuis ton ordinateur :
+
+```bash
+python scripts/fetch_opendata.py casias --fresh
+gzip -c data/spots_casias.json > spots_casias.json.gz
+gh release upload donnees spots_casias.json.gz --clobber
+```
+
 Ou pour refaire une source : `fetch_wikidata.py`, `fetch_opendata.py` (Mérimée + Cartofriches + CASIAS), `fetch_osm_extract.py` (sans argument : la France ; sinon une liste d'URL d'extraits Geofabrik).
 
 ## Quels lieux sont inclus ?

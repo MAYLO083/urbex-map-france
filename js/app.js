@@ -113,43 +113,57 @@
   // ================================================================ Sources
   const osmUrl = (id) => `https://www.openstreetmap.org/${{ n: "node", w: "way", r: "relation" }[id[0]]}/${id.slice(1)}`;
   const SOURCES = {
-    communaute: { label: "Communauté", file: "data/spots_communaute.json", hint: "Lieux proposés et validés",
+    communaute: { label: "Communauté", hint: "Lieux proposés et validés",
       link: (id) => [`${REPO}/issues/${id.slice(1)}`, "Voir la proposition"] },
-    osm: { label: "OpenStreetMap", file: "data/spots.json", hint: "Abandonnés, en ruine, bunkers",
+    osm: { label: "OpenStreetMap", hint: "Abandonnés, en ruine, bunkers",
       link: (id) => [osmUrl(id), "Voir sur OpenStreetMap"] },
-    wikidata: { label: "Wikidata", file: "data/spots_wikidata.json", hint: "Désaffectés, abandonnés, avec photos",
+    wikidata: { label: "Wikidata", hint: "Désaffectés, abandonnés, avec photos",
       link: (id) => [`https://www.wikidata.org/wiki/${id}`, "Fiche Wikidata"] },
-    merimee: { label: "Monuments historiques", file: "data/spots_merimee.json", hint: "Vestiges, désaffectés, menacés",
+    merimee: { label: "Monuments historiques", hint: "Vestiges, désaffectés, menacés",
       link: (id) => [`https://pop.culture.gouv.fr/notice/merimee/${id.slice(1)}`, "Fiche Mérimée"] },
-    friches: { label: "Friches", file: "data/spots_friches.json", hint: "Cartofriches · non reconverties",
+    friches: { label: "Friches", hint: "Cartofriches · non reconverties",
       link: (id) => [`https://cartofriches.cerema.fr/cartofriches/?site=${encodeURIComponent(id.slice(1))}`, "Fiche Cartofriches"] },
-    casias: { label: "Anciens sites industriels", file: "data/spots_casias.json", hint: "CASIAS · souvent démolis",
+    casias: { label: "Anciens sites industriels", hint: "CASIAS · souvent démolis",
       link: (id) => [`https://fiches-risques.brgm.fr/georisques/casias/${id.slice(1)}`, "Fiche Géorisques"] },
   };
 
   // ================================================================ État
-  let spots = [];
-  let markers = [];
+  // Les lieux sont découpés en cases de 0,5° (data/tiles/c/*.json) : on ne charge que celles qu'on regarde.
+  let meta = null;            // data/tiles/meta.json : version, totaux
+  let cells = [];             // data/tiles/overview.json : une bulle par case de 1° (vue dézoomée)
+  const tileExists = new Set();
+  const tiles = new Map();    // case → { items: [[lieu, marqueur]], ready, used }
+  const shown = new Set();    // cases dont les marqueurs sont sur la carte
+  const byId = new Map();     // id → [lieu, marqueur]
   const active = new Set(JSON.parse(localStorage.getItem(FILTER_KEY) || "null") || Object.keys(CATEGORIES));
   const activeSources = new Set(JSON.parse(localStorage.getItem(SOURCE_KEY) || "null") || Object.keys(SOURCES));
   let namedOnly = false;
+  let pendingFocus = null;
 
   // ================================================================ Clusters & marqueurs
+  function bubble(n) {
+    const size = n < 10 ? 34 : n < 100 ? 42 : n < 1000 ? 50 : 58;
+    const cls = n < 10 ? "s" : n < 100 ? "m" : n < 1000 ? "l" : "xl";
+    const label = n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1).replace(".0", "") + "k" : n;
+    return L.divIcon({ html: `<div>${label}</div>`, className: `ucluster ucluster-${cls}`, iconSize: [size, size] });
+  }
   const cluster = L.markerClusterGroup({
     chunkedLoading: true,
     maxClusterRadius: (z) => (z < 9 ? 64 : z < 13 ? 48 : 32),
     disableClusteringAtZoom: 16,
     spiderfyOnMaxZoom: true,
     showCoverageOnHover: false,
-    iconCreateFunction: (c) => {
-      const n = c.getChildCount();
-      const size = n < 10 ? 34 : n < 100 ? 42 : n < 1000 ? 50 : 58;
-      const cls = n < 10 ? "s" : n < 100 ? "m" : n < 1000 ? "l" : "xl";
-      const label = n >= 10000 ? Math.round(n / 1000) + "k" : n >= 1000 ? (n / 1000).toFixed(1).replace(".0", "") + "k" : n;
-      return L.divIcon({ html: `<div>${label}</div>`, className: `ucluster ucluster-${cls}`, iconSize: [size, size] });
-    },
+    iconCreateFunction: (c) => bubble(c.getChildCount()),
   });
   map.addLayer(cluster);
+
+  // Vue dézoomée : une bulle par case de 1°, avec le nombre de lieux (sans charger les lieux)
+  const overviewLayer = L.markerClusterGroup({
+    maxClusterRadius: 80,
+    showCoverageOnHover: false,
+    spiderfyOnMaxZoom: false,
+    iconCreateFunction: (c) => bubble(c.getAllChildMarkers().reduce((t, m) => t + m.options.count, 0)),
+  });
 
   const coordsBtn = (lat, lon) =>
     `<button class="coords" data-copy="${lat.toFixed(5)}, ${lon.toFixed(5)}"><span>${lat.toFixed(5)}, ${lon.toFixed(5)}</span><em>Copier</em></button>`;
@@ -203,20 +217,43 @@
   const inSources = (s) => activeSources.has(s._src) || (s._also || []).some(([k]) => activeSources.has(k));
   const visible = (s) => active.has(s[3]) && inSources(s) && (!namedOnly || s[2]);
 
+  // Compteurs : meta.totals et overview donnent « catégorie|source|nommé(0/1) » → nombre
+  const keyOk = (k) => { const [c, src, n] = k.split("|"); return active.has(c) && activeSources.has(src) && (!namedOnly || n === "1"); };
+  const sumCounts = (n) => { let t = 0; for (const k in n) if (keyOk(k)) t += n[k]; return t; };
+  const countBy = (part) => {
+    const out = {};
+    for (const [k, n] of Object.entries(meta.totals)) { const x = k.split("|")[part]; out[x] = (out[x] || 0) + n; }
+    return out;
+  };
+
+  const renderOverview = () => {
+    overviewLayer.clearLayers();
+    const ms = [];
+    for (const cell of cells) {
+      const n = sumCounts(cell.n);
+      if (!n) continue;
+      const m = L.marker(cell.c, { icon: bubble(n), count: n });
+      m.on("click", () => map.setView(cell.c, 10));
+      ms.push(m);
+    }
+    overviewLayer.addLayers(ms);
+  };
+
   const refresh = () => {
-    cluster.clearLayers();
-    const list = [];
-    for (let i = 0; i < spots.length; i++) if (visible(spots[i])) list.push(markers[i]);
-    cluster.addLayers(list);
-    $("count-visible").textContent = fmt(list.length);
     localStorage.setItem(FILTER_KEY, JSON.stringify([...active]));
     localStorage.setItem(SOURCE_KEY, JSON.stringify([...activeSources]));
+    if (!meta) return;
+    $("count-visible").textContent = fmt(sumCounts(meta.totals));
+    cluster.clearLayers();
+    const list = [];
+    for (const k of shown) for (const [s, m] of tiles.get(k).items) if (visible(s)) list.push(m);
+    cluster.addLayers(list);
+    renderOverview();
   };
 
   // ================================================================ Filtres
   const buildFilters = () => {
-    const counts = {};
-    for (const s of spots) counts[s[3]] = (counts[s[3]] || 0) + 1;
+    const counts = countBy(0);
     $("filters").innerHTML = Object.entries(CATEGORIES).map(([k, c]) => `
       <button class="chip ${active.has(k) ? "on" : ""}" data-k="${k}" style="--c:${c.color}">
         <span class="ico" style="background:${c.color}22">${c.icon}</span>
@@ -242,10 +279,7 @@
   $("named-only").onchange = (e) => { namedOnly = e.target.checked; refresh(); };
 
   const buildSourceFilters = () => {
-    const counts = {};
-    for (const s of spots) {
-      for (const k of new Set([s._src, ...(s._also || []).map(([x]) => x)])) counts[k] = (counts[k] || 0) + 1;
-    }
+    const counts = countBy(1);
     $("sources").innerHTML = Object.entries(SOURCES).filter(([k]) => counts[k]).map(([k, s]) => `
       <label class="src-row">
         <span class="txt"><b>${s.label}</b><small>${s.hint}</small></span>
@@ -270,7 +304,12 @@
 
   // ================================================================ Recherche
   const norm = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  let normNames = [];
+  // Index des noms : chargé seulement la première fois qu'on cherche
+  let searchIndex = null, searchLoading = null, lastFound = [];
+  const loadSearch = () => (searchLoading ??= fetch(`data/tiles/search.json?v=${meta ? meta.v : ""}`)
+    .then((r) => r.json())
+    .then((rows) => { searchIndex = rows.map((r) => [r, norm(r[2])]); })
+    .catch(() => { searchLoading = null; }));
   const results = $("results");
   let searchTimer;
   $("search").addEventListener("input", (e) => {
@@ -278,7 +317,7 @@
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => runSearch(e.target.value), 120);
   });
-  $("search").addEventListener("focus", () => { if (isMobile()) openSheet(true); });
+  $("search").addEventListener("focus", () => { loadSearch(); if (isMobile()) openSheet(true); });
   $("search-clear").onclick = () => { $("search").value = ""; $("search-clear").hidden = true; results.innerHTML = ""; $("search").focus(); };
 
   const runSearch = (raw) => {
@@ -286,38 +325,43 @@
     results.innerHTML = "";
     if (q.length < 2) return;
     const words = q.split(/\s+/);
-    const found = [];
-    for (const m of mine) if (words.every((w) => norm(m.name || "").includes(w))) found.push(m);
-    for (let i = 0; i < spots.length && found.length < 50; i++) {
-      if (normNames[i] && words.every((w) => normNames[i].includes(w))) found.push(i);
+    const mineFound = mine.filter((m) => words.every((w) => norm(m.name || "").includes(w)));
+    if (!searchIndex) {
+      results.innerHTML = `<li class="none">Chargement de l'index…</li>`;
+      loadSearch().then(() => { if (searchIndex) runSearch($("search").value); });
+      return;
     }
-    if (!found.length) { results.innerHTML = `<li class="none">Aucun lieu trouvé</li>`; return; }
-    results.innerHTML = found.map((f) => {
-      if (typeof f === "number") {
-        const s = spots[f];
-        const c = CATEGORIES[s[3]] || CATEGORIES.autre;
-        return `<li tabindex="0" data-i="${f}"><span class="ico" style="background:${c.color}22">${c.icon}</span>
-          <span class="txt"><b>${esc(s[2])}</b><small>${c.label} · ${SOURCES[s._src].label}</small></span></li>`;
-      }
-      return `<li tabindex="0" data-m="${f.id}"><span class="ico" style="background:#ff3d0022">📌</span>
-        <span class="txt"><b>${esc(f.name)}</b><small>Mon spot</small></span></li>`;
-    }).join("");
+    lastFound = [];
+    for (const [r, n] of searchIndex) {
+      if (words.every((w) => n.includes(w))) { lastFound.push(r); if (lastFound.length >= 50) break; }
+    }
+    if (!mineFound.length && !lastFound.length) { results.innerHTML = `<li class="none">Aucun lieu trouvé</li>`; return; }
+    results.innerHTML = mineFound.map((f) => `<li tabindex="0" data-m="${f.id}"><span class="ico" style="background:#ff3d0022">📌</span>
+        <span class="txt"><b>${esc(f.name)}</b><small>Mon spot</small></span></li>`).join("") +
+      lastFound.map((r, i) => {
+        const c = CATEGORIES[r[3]] || CATEGORIES.autre;
+        return `<li tabindex="0" data-r="${i}"><span class="ico" style="background:${c.color}22">${c.icon}</span>
+          <span class="txt"><b>${esc(r[2])}</b><small>${c.label} · ${SOURCES[r[4]].label}</small></span></li>`;
+      }).join("");
   };
   results.onclick = (e) => {
     const li = e.target.closest("li");
     if (!li) return;
-    if (li.dataset.i) focusSpot(+li.dataset.i);
+    if (li.dataset.r) focusRemote(lastFound[+li.dataset.r]);
     else if (li.dataset.m) focusMine(mine.find((m) => m.id === li.dataset.m));
   };
 
-  const focusSpot = (i) => {
-    const s = spots[i];
-    if (!visible(s)) {
-      active.add(s[3]); activeSources.add(s._src); namedOnly = false; $("named-only").checked = false;
+  // Aller à un lieu trouvé : on centre la carte, la case se charge, puis on ouvre la fiche
+  const focusRemote = (r) => {
+    const [lat, lon, , cat, src, id] = r;
+    if (!active.has(cat) || !activeSources.has(src) || namedOnly) {
+      active.add(cat); activeSources.add(src); namedOnly = false; $("named-only").checked = false;
       buildFilters(); buildSourceFilters(); refresh();
     }
     if (isMobile()) openSheet(false);
-    cluster.zoomToShowLayer(markers[i], () => markers[i].openPopup());
+    pendingFocus = id;
+    map.setView([lat, lon], Math.max(map.getZoom(), 17));
+    updateView();
   };
 
   // ================================================================ Mes spots
@@ -464,84 +508,116 @@
   const dlg = $("disclaimer");
   $("show-disclaimer").onclick = () => dlg.showModal();
 
-  // ================================================================ Fusion des doublons entre sources
-  // Deux fiches de sources différentes = même lieu si elles sont à moins de 30 m, ou à moins de 100 m avec un nom proche.
-  // Dans une même source : seulement les fiches en double (même nom, moins de 30 m).
-  // On garde la fiche de la source la plus fiable et on lui rattache les autres (liens conservés).
-  const PRIORITY = ["communaute", "wikidata", "merimee", "osm", "friches", "casias"];
-  const STOP = new Set("de du des la le les et au aux en sur sous ancien ancienne anciens anciennes site friche usine lieu".split(" "));
-  const nameTokens = (n) => new Set(norm((n || "").replace(/\(.*?\)/g, " ")).split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w)));
-  const similar = (a, b) => {
-    if (!a.size || !b.size) return false;
-    let common = 0;
-    for (const w of a) if (b.has(w)) common++;
-    return common / Math.min(a.size, b.size) >= 0.6;
-  };
-  const dedupe = (list) => {
-    list.sort((a, b) => PRIORITY.indexOf(a._src) - PRIORITY.indexOf(b._src));
-    const CELL = 0.0015; // ~ 120-160 m
-    const grid = new Map();
-    const kept = [];
-    let merged = 0;
-    for (const s of list) {
-      const cx = Math.floor(s[0] / CELL), cy = Math.floor(s[1] / CELL);
-      const cosLat = Math.cos((s[0] * Math.PI) / 180);
-      let twin = null, best = Infinity;
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-        for (const k of grid.get(`${cx + dx},${cy + dy}`) || []) {
-          const same = k._src === s._src;
-          if (same && (!s[2] || k[2] !== s[2])) continue; // même source : seulement une fiche en double (même nom)
-          const d = Math.hypot((k[0] - s[0]) * 111320, (k[1] - s[1]) * 111320 * cosLat);
-          if (d >= best) continue;
-          if (d < 30 || (!same && d < 100 && similar((k._tok ??= nameTokens(k[2])), (s._tok ??= nameTokens(s[2]))))) { twin = k; best = d; }
+  // ================================================================ Chargement des cases visibles
+  // (la fusion des doublons est faite à l'avance par scripts/build_tiles.py)
+  const MAX_TILES = 40;
+  const loadingEl = $("loading");
+  let loadingCount = 0;
+  const setLoading = (d) => { loadingCount += d; loadingEl.hidden = loadingCount <= 0; };
+
+  const loadTile = (k) => {
+    const cached = tiles.get(k);
+    if (cached) { cached.used = Date.now(); return cached.ready; }
+    const entry = { items: [], used: Date.now() };
+    setLoading(1);
+    entry.ready = fetch(`data/tiles/c/${k}.json?v=${meta.v}`)
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then((rows) => {
+        for (const s of rows) {
+          s._src = s[7];
+          s._also = s[8];
+          const m = makeMarker(s);
+          entry.items.push([s, m]);
+          byId.set(s[5], [s, m]);
         }
-      }
-      if (twin) {
-        (twin._also ??= []).push([s._src, s[5]]);
-        if (!twin[2] && s[2]) twin[2] = s[2];
-        if (!twin[6] && s[6]) twin[6] = s[6];
-        if (!twin[4] && s[4]) twin[4] = s[4];
-        if (twin[3] === "autre" && s[3] !== "autre") twin[3] = s[3];
-        merged++;
-        continue;
-      }
-      const key = `${cx},${cy}`;
-      if (!grid.has(key)) grid.set(key, []);
-      grid.get(key).push(s);
-      kept.push(s);
-    }
-    for (const s of kept) delete s._tok;
-    return { kept, merged };
+      })
+      .catch(() => { tiles.delete(k); toast("Zone non chargée, vérifie ta connexion"); })
+      .finally(() => setLoading(-1));
+    tiles.set(k, entry);
+    return entry.ready;
   };
 
-  // ================================================================ Chargement
-  const load =(url) => fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const keys = Object.keys(SOURCES);
-  Promise.all(keys.map((k) => load(SOURCES[k].file)))
-    .then((all) => {
-      let generated = "";
-      all.forEach((data, i) => {
-        if (!data) return;
-        if (data.generated > generated) generated = data.generated;
-        for (const s of data.spots) { s._src = keys[i]; spots.push(s); }
-      });
-      if (!spots.length) throw new Error("aucune donnée");
-      const { kept, merged } = dedupe(spots);
-      spots = kept;
-      window.__merged = merged;
-      $("splash-sub").textContent = `${fmt(spots.length)} lieux trouvés`;
-      markers = spots.map(makeMarker);
-      normNames = spots.map((s) => (s[2] ? norm(s[2]) : ""));
+  // Cases visibles (avec une petite marge) ; null = trop de cases → vue dézoomée
+  const neededTiles = () => {
+    const z = map.getZoom();
+    if (z < 8) return null;
+    const b = map.getBounds().pad(0.15), t = meta.tile, out = [];
+    for (let y = Math.floor(b.getSouth() / t); y <= Math.floor(b.getNorth() / t); y++) {
+      for (let x = Math.floor(b.getWest() / t); x <= Math.floor(b.getEast() / t); x++) {
+        const k = `${y}_${x}`;
+        if (tileExists.has(k)) out.push(k);
+      }
+    }
+    return z < 10 && out.length > MAX_TILES ? null : out;
+  };
+
+  // Libère la mémoire des cases vues il y a longtemps (utile si on parcourt beaucoup de pays)
+  const evict = () => {
+    if (tiles.size <= 160) return;
+    const old = [...tiles.entries()].filter(([k]) => !shown.has(k)).sort((a, b) => a[1].used - b[1].used);
+    for (const [k, e] of old.slice(0, tiles.size - 120)) {
+      for (const [s] of e.items) byId.delete(s[5]);
+      tiles.delete(k);
+    }
+  };
+
+  let viewSeq = 0;
+  const updateView = async () => {
+    if (!meta) return;
+    const need = neededTiles();
+    if (!need) {
+      if (map.hasLayer(cluster)) map.removeLayer(cluster);
+      if (!map.hasLayer(overviewLayer)) map.addLayer(overviewLayer);
+      return;
+    }
+    if (map.hasLayer(overviewLayer)) map.removeLayer(overviewLayer);
+    if (!map.hasLayer(cluster)) map.addLayer(cluster);
+    const seq = ++viewSeq;
+    await Promise.all(need.map(loadTile));
+    if (seq !== viewSeq) return; // la carte a bougé entre-temps : une vue plus récente s'en occupe
+    const needSet = new Set(need), add = [], rem = [];
+    for (const k of [...shown]) {
+      if (needSet.has(k) && tiles.has(k)) continue;
+      shown.delete(k);
+      for (const [, m] of tiles.get(k)?.items || []) rem.push(m);
+    }
+    for (const k of need) {
+      if (shown.has(k) || !tiles.has(k)) continue;
+      shown.add(k);
+      for (const [s, m] of tiles.get(k).items) if (visible(s)) add.push(m);
+    }
+    if (rem.length) cluster.removeLayers(rem);
+    if (add.length) cluster.addLayers(add);
+    evict();
+    if (pendingFocus && byId.has(pendingFocus)) {
+      const [, m] = byId.get(pendingFocus);
+      pendingFocus = null;
+      cluster.zoomToShowLayer(m, () => m.openPopup());
+    }
+  };
+  map.on("moveend", updateView);
+
+  // ================================================================ Démarrage
+  (async () => {
+    try {
+      meta = await fetch(`data/tiles/meta.json?t=${Date.now()}`).then((r) => r.json());
+      cells = await fetch(`data/tiles/overview.json?v=${meta.v}`).then((r) => r.json());
+      for (const c of cells) for (const t of c.t) tileExists.add(t);
+      $("splash-sub").textContent = `${fmt(meta.count)} lieux`;
       buildFilters();
       buildSourceFilters();
       refresh();
-      if (generated) $("updated-line").textContent = `Données mises à jour le ${new Date(generated).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}. ${fmt(merged)} doublons fusionnés entre les sources.`;
-    })
-    .catch(() => { toast("Impossible de charger les lieux"); })
-    .finally(() => {
+      updateView();
+      if (meta.generated) {
+        $("updated-line").textContent = `Données mises à jour le ${new Date(meta.generated).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}. ${fmt(meta.merged)} doublons fusionnés entre les sources.`;
+      }
+    } catch {
+      toast("Impossible de charger les lieux");
+    } finally {
       setTimeout(() => {
         document.body.classList.add("ready");
         if (!localStorage.getItem(SEEN_KEY)) { dlg.showModal(); localStorage.setItem(SEEN_KEY, "1"); }
-      }, 350);
-    });
+      }, 250);
+    }
+  })();
 })();

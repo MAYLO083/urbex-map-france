@@ -13,7 +13,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: community-spots
+  group: data-update
   cancel-in-progress: false
 
 jobs:
@@ -34,11 +34,13 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: python scripts/add_community_spot.py >> "$GITHUB_OUTPUT"
+      - name: Préparer les tuiles
+        run: python scripts/build_tiles.py
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/spots_communaute.json
+          git add -A data
           git diff --cached --quiet || git commit -m "Lieu de la communauté : ${{ github.event.action == 'labeled' && 'ajout' || 'retrait' }} (#${{ github.event.issue.number }})"
           git pull --rebase -q
           git push

@@ -46,6 +46,16 @@ python -m http.server 8000
 
 Puis ouvre <http://localhost:8000>.
 
+## Comment la carte reste rapide
+
+Le site ne télécharge pas tous les lieux d'un coup. `scripts/build_tiles.py` prépare les données dans `data/tiles/` :
+
+- `meta.json` + `overview.json` (~10 Ko) : chargés à l'ouverture, ils affichent les bulles par région ;
+- `c/<case>.json` : les lieux d'une case de 0,5° × 0,5°, chargés seulement quand on regarde cette zone ;
+- `search.json` : l'index des noms, chargé seulement quand on utilise la recherche.
+
+La fusion des doublons entre sources est faite à ce moment-là, une fois pour toutes. Ce découpage permet d'ajouter d'autres pays sans ralentir l'ouverture.
+
 ## Mettre à jour les données
 
 ```bash
@@ -53,6 +63,7 @@ python scripts/fetch_wikidata.py   # rapide (~1 min)
 python scripts/fetch_opendata.py   # Mérimée + Cartofriches + CASIAS (~200 Mo à télécharger)
 pip install osmium                 # puis, sous Linux : apt install osmium-tool
 python scripts/fetch_osm_extract.py   # OpenStreetMap : télécharge l'extrait officiel France (~5 Go, Geofabrik) et le filtre
+python scripts/build_tiles.py      # à lancer après : fusion des doublons + découpage en tuiles
 ```
 
 `fetch_wikidata.py` récupère les lieux marqués *désaffecté*, *abandonné*, *hors service*, *en ruine*, *fermé définitivement*, les ruines et villages fantômes (données CC0, avec photo quand elle existe).

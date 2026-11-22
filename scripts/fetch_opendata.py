@@ -87,7 +87,10 @@ def download_casias(path: Path) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     print("→ téléchargement casias.csv par pages…", flush=True)
     hits = fetch(URLS["casias"].replace("&outputformat=csvtext", "") + "&resultType=hits")
-    total = int(re.search(rb'numberMatched="(\d+)"', hits).group(1))
+    m = re.search(rb'numberMatched="(\d+)"', hits)
+    if not m:
+        raise OSError(f"réponse inattendue du serveur CASIAS : {hits[:400]!r}")
+    total = int(m.group(1))
     print(f"  {total} fiches à récupérer", flush=True)
     header, rows, start = None, 0, 0
     tmp = path.with_suffix(".part")

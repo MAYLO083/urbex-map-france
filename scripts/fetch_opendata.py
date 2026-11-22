@@ -21,6 +21,7 @@ import io
 import json
 import re
 import sys
+import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,15 +32,17 @@ from fetch_spots import categorize  # noqa: E402
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 CACHE = DATA / ".cache"
-UA = "urbex-map-france/1.0 (open-source map project)"
+UA = "urbex-map/1.0 (open-source map project)"
 csv.field_size_limit(10**9)
 
 URLS = {
     "merimee": "https://ministere-culture.s3.sbg.io.cloud.ovh.net/POP/merimee.csv",
     "friches": "https://www.data.gouv.fr/api/1/datasets/61892a26c94e39bde1dbf7ac/",  # on y lit l'URL du CSV à jour
+    # Téléchargé par pages (le fichier complet, ~80 Mo, coupe souvent depuis GitHub)
     "casias": ("https://mapsref.brgm.fr/wxs/georisques/georisques_dl?service=wfs&version=2.0.0"
-               "&request=getfeature&typename=etablissement_point&outputformat=csvtext"),
+               "&request=getfeature&typename=etablissement_point&outputformat=csvtext&sortBy=code_metier"),
 }
+CASIAS_PAGE = 25000
 
 FRANCE = (41.3, 51.2, -5.3, 9.7)  # métropole + Corse
 
@@ -48,15 +51,68 @@ def in_france(lat: float, lon: float) -> bool:
     return FRANCE[0] <= lat <= FRANCE[1] and FRANCE[2] <= lon <= FRANCE[3]
 
 
+def fetch(url: str, tries: int = 6) -> bytes:
+    """Télécharge en réessayant (les serveurs publics coupent parfois la connexion)."""
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(req, timeout=300) as r:
+                data = r.read()
+                total = r.headers.get("Content-Length")
+            if total and len(data) != int(total):
+                raise OSError(f"incomplet ({len(data)} / {total} octets)")
+            return data
+        except Exception as e:  # noqa: BLE001
+            if attempt == tries - 1:
+                raise
+            wait = 15 * (attempt + 1)
+            print(f"  échec ({e}), nouvel essai dans {wait}s", flush=True)
+            time.sleep(wait)
+    raise AssertionError
+
+
 def download(url: str, name: str) -> Path:
     CACHE.mkdir(parents=True, exist_ok=True)
     path = CACHE / name
     print(f"→ téléchargement {name}…", flush=True)
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=900) as r, open(path, "wb") as f:
-        while chunk := r.read(1 << 20):
-            f.write(chunk)
+    tmp = path.with_suffix(".part")
+    tmp.write_bytes(fetch(url))
+    tmp.replace(path)
     print(f"  {path.stat().st_size / 1e6:.1f} Mo", flush=True)
+    return path
+
+
+def download_casias(path: Path) -> Path:
+    """Toutes les fiches CASIAS, page par page (chaque page réessayée séparément)."""
+    CACHE.mkdir(parents=True, exist_ok=True)
+    print("→ téléchargement casias.csv par pages…", flush=True)
+    hits = fetch(URLS["casias"].replace("&outputformat=csvtext", "") + "&resultType=hits")
+    total = int(re.search(rb'numberMatched="(\d+)"', hits).group(1))
+    print(f"  {total} fiches à récupérer", flush=True)
+    header, rows, start = None, 0, 0
+    tmp = path.with_suffix(".part")
+    with open(tmp, "wb") as out:
+        while True:
+            data = fetch(f"{URLS['casias']}&count={CASIAS_PAGE}&startIndex={start}")
+            lines = data.split(b"\n", 1)
+            if not lines[0].startswith(b"code_metier;"):
+                raise OSError(f"réponse inattendue : {data[:200]!r}")
+            body = lines[1] if len(lines) > 1 else b""
+            n = body.count(b"\n")
+            if header is None:
+                header = lines[0]
+                out.write(header + b"\n")
+            if not body.strip():
+                break
+            out.write(body if body.endswith(b"\n") else body + b"\n")
+            rows += n
+            start += CASIAS_PAGE
+            print(f"  {rows} fiches", flush=True)
+            if start >= total:
+                break
+    if rows < 100000:
+        raise OSError(f"seulement {rows} fiches reçues")
+    tmp.replace(path)
     return path
 
 
@@ -137,7 +193,7 @@ FRICHE_CAT = {
 
 
 def friches() -> None:
-    meta = json.load(urllib.request.urlopen(urllib.request.Request(URLS["friches"], headers={"User-Agent": UA})))
+    meta = json.loads(fetch(URLS["friches"]))
     url = next(r["url"] for r in meta["resources"] if r["url"].endswith("friches-standard.csv"))
     path = download(url, "friches.csv")
     spots = []
@@ -196,7 +252,7 @@ CASIAS_SKIP = re.compile(
 def casias() -> None:
     path = CACHE / "casias.csv"
     if not path.exists() or "--fresh" in sys.argv:
-        path = download(URLS["casias"], "casias.csv")
+        path = download_casias(path)
     spots = []
     with open(path, encoding="utf-8", newline="") as f:
         for row in csv.DictReader(f, delimiter=";"):

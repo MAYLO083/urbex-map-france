@@ -164,6 +164,8 @@ body.collapsed #panel .search { margin-bottom: 14px; }
 }
 .cta:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(255, 120, 30, .38); }
 .cta span { font-size: 20px; line-height: 1; }
+.cta.discord { margin: 0 0 14px; background: #5865f2; color: #fff; box-shadow: 0 8px 22px rgba(88, 101, 242, .3); }
+.cta.discord:hover { box-shadow: 0 12px 28px rgba(88, 101, 242, .42); }
 
 .row { display: flex; gap: 8px; margin-top: 12px; }
 .btn {

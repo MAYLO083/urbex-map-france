@@ -19,6 +19,12 @@ Les données viennent de bases libres et ouvertes, mises à jour automatiquement
 
 Chaque source peut être affichée ou masquée dans le panneau « Sources ».
 
+## Communauté Discord
+
+💬 **Rejoindre le serveur : <https://discord.gg/F5gXjfSCA6>** (explos, photos, entraide, idées pour l'appli).
+
+Le salon **#mises-à-jour-carte** reçoit automatiquement un message à chaque mise à jour de la carte et à chaque lieu de la communauté validé (`scripts/discord_notify.py`, webhook enregistré dans le secret `DISCORD_WEBHOOK` du dépôt).
+
 ## Proposer un lieu
 
 Bouton **« Proposer un lieu à la communauté »** sur la carte (ou dans la fiche d'un de tes spots perso) → formulaire GitHub.

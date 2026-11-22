@@ -6,7 +6,7 @@ name: Publication du site
 on:
   push:
     branches: [main]
-    paths-ignore: ["README.md", "LICENSE", "scripts/fetch_*.py", "scripts/plan_regions.py", ".github/ISSUE_TEMPLATE/**"]
+    paths-ignore: ["README.md", "LICENSE", "scripts/fetch_*.py", "scripts/plan_regions.py", "scripts/discord_notify.py", ".github/ISSUE_TEMPLATE/**"]
   workflow_dispatch:
   workflow_call:
 

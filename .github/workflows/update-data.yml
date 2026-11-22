@@ -116,8 +116,16 @@ jobs:
     needs: [plan, osm, autres]
     if: always() && needs.plan.result == 'success'
     runs-on: ubuntu-latest
+    outputs:
+      avant: ${{ steps.avant.outputs.count }}
     steps:
       - uses: actions/checkout@v4
+      - name: Nombre de lieux avant la mise à jour
+        id: avant
+        continue-on-error: true
+        run: |
+          n=$(curl -sf "https://maylo083.github.io/urbex-map-france/data/tiles/meta.json?t=$(date +%s)" | python3 -c "import json,sys; print(json.load(sys.stdin)['count'])")
+          echo "count=$n" >> "$GITHUB_OUTPUT"
       - name: Reprendre les sources précédentes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -170,3 +178,15 @@ jobs:
       pages: write
       id-token: write
     uses: ./.github/workflows/build-site.yml
+
+  annoncer:
+    needs: [ranger, publier]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Annoncer la mise à jour sur Discord
+        continue-on-error: true
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          AVANT: ${{ needs.ranger.outputs.avant }}
+        run: python3 scripts/discord_notify.py carte

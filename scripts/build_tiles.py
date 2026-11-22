@@ -48,8 +48,12 @@ SOURCES = {
     "communaute": "spots_communaute.json",
     "wikidata": "spots_wikidata.json",
     "merimee": "spots_merimee.json",
+    "heritage": "spots_heritage.json",
+    "mines_on": "spots_mines_on.json",
     "osm": "osm",  # dossier : un fichier par région du monde
     "friches": "spots_friches.json",
+    "friches_uk": "spots_friches_uk.json",
+    "geonames": "spots_geonames.json",  # positions parfois approximatives : passe après les autres
     "casias": "spots_casias.json",
 }
 
@@ -107,8 +111,11 @@ def dedupe(spots: list) -> tuple[list, int]:
         cx, cy = int(math.floor(s["lat"] / cell)), int(math.floor(s["lon"] / cell))
         cos = math.cos(math.radians(s["lat"]))
         twin, best = None, float("inf")
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
+        # GeoNames place souvent ses points à quelques centaines de mètres : on cherche plus loin (1,5 km, même nom)
+        far = s["src"] == "geonames"
+        span = range(-10, 11) if far else (-1, 0, 1)
+        for dx in span:
+            for dy in span:
                 for k in grid.get((cx + dx, cy + dy), ()):
                     same = k["src"] == s["src"]
                     if same and (not s["name"] or k["name"] != s["name"]):
@@ -116,7 +123,7 @@ def dedupe(spots: list) -> tuple[list, int]:
                     d = math.hypot((k["lat"] - s["lat"]) * 111320, (k["lon"] - s["lon"]) * 111320 * cos)
                     if d >= best:
                         continue
-                    if d < 30 or (not same and d < 100 and similar(
+                    if d < 30 or (not same and d < (1500 if far else 100) and similar(
                             k.setdefault("tok", tokens(k["name"])), s.setdefault("tok", tokens(s["name"])))):
                         twin, best = k, d
         if twin:

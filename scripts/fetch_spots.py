@@ -92,12 +92,13 @@ RULES = [
                    "convento", "kerk", "kościół", "церковь", "храм")),
     ("industriel", ("industrial", "factory", "works", "=mine", "quarry", "mill", "kiln", "chimney", "silo",
                     "gasometer", "power_plant", "power station", "nuclear", "warehouse", "adit", "mineshaft",
-                    "crane", "storage_tank", "sugar refinery", "foundry", "barrage", "dam", "réacteur", "reactor", "centrale"),
+                    "crane", "storage_tank", "sugar refinery", "foundry", "barrage", "dam", "réacteur", "reactor", "centrale",
+                    "power=plant", "power=substation", "brownfield", "landuse=quarry", "landuse=industrial"),
                    ("usine", "moulin", "mine ", "carrière", "forge", "filature", "sucrerie", "tannerie",
                     "verrerie", "papeterie", "distillerie", "fonderie", "factory", "fabrik", "fabbrica", "fábrica",
                     "fabrica", "brewery", "brauerei", "zeche", "quarry", "steelworks", "power plant",
                     "kraftwerk", "fabriek", "завод", "фабрика")),
-    ("transport", ("station", "railway", "train", "tunnel", "aerodrome", "airport", "hangar", "lighthouse",
+    ("transport", ("station", "railway", "train", "tunnel", "aerodrome", "airport", "hangar", "lighthouse", "aeroway",
                    "bridge", "tram", "trolleybus", "viaduc", "viaduct", "gare", "triage"),
                   ("gare", "tunnel", "phare", "aérodrome", "station", "bahnhof", "stazione", "estación", "estação",
                    "lighthouse", "leuchtturm", "airfield", "depot", "вокзал")),
@@ -106,12 +107,13 @@ RULES = [
                  "castelo", "manor", "palace", "palazzo", "palacio", "kasteel", "zamek", "замок", "усадьба")),
     ("loisirs", ("school", "hotel", "restaurant", "cinema", "theatre", "swimming", "sports", "stadium",
                  "camp_site", "theme_park", "amusement", "nightclub", "casino", "shop", "=pub", "=bar",
-                 "cafe", "retail", "commercial", "racecourse", "hippodrome", "concert", "prison", "escalier"),
+                 "cafe", "retail", "commercial", "racecourse", "hippodrome", "concert", "prison", "escalier",
+                 "leisure", "tourism"),
                 ("école", "hôtel", "colonie", "piscine", "cinéma", "discothèque", "lycée", "collège", "hotel",
                  "school", "schule", "scuola", "escuela", "cinema", "kino", "theater", "theatre", "prison",
                  "gefängnis", "waterpark", "amusement", "pionierlager", "лагерь", "школа", "гостиница")),
     ("habitation", ("house", "residential", "farm", "barn", "detached", "apartments", "villa", "cabin",
-                    "=hut", "shed", "dwelling"),
+                    "=hut", "shed", "dwelling", "abandoned:place", "village", "hamlet"),
                    ("maison", "ferme", "villa", "mas ", "grange", "bastide", "house", "farm", "cottage", "haus",
                     "casa ", "cascina", "masseria", "hacienda", "дом ")),
 ]
@@ -140,6 +142,10 @@ def describe(tags: dict) -> str:
     """Petit libellé du type d'objet OSM (ex. 'building=industrial')."""
     for k in ("abandoned:building", "abandoned:amenity", "abandoned:man_made", "abandoned:industrial",
               "disused:building", "disused:amenity", "disused:man_made", "ruins:building",
+              "abandoned:place", "abandoned:railway", "disused:railway", "abandoned:aeroway", "disused:aeroway",
+              "abandoned:military", "disused:military", "abandoned:power", "disused:power",
+              "abandoned:tourism", "disused:tourism", "abandoned:leisure", "disused:leisure",
+              "abandoned:landuse", "disused:landuse",
               "historic", "military", "amenity", "man_made", "industrial", "building", "landuse", "tourism"):
         v = tags.get(k)
         if v and v not in ("yes",):

@@ -11,6 +11,10 @@ Les données viennent de bases libres et ouvertes, mises à jour automatiquement
 | 🇫🇷 [Mérimée](https://pop.culture.gouv.fr) (ministère de la Culture) | monuments historiques en vestiges, désaffectés, menacés, en mauvais état | Licence Ouverte |
 | 🇫🇷 [Cartofriches](https://cartofriches.cerema.fr) (Cerema) | friches non reconverties et inoccupées | Licence Ouverte |
 | 🇫🇷 [CASIAS](https://www.georisques.gouv.fr) (BRGM) | anciens sites industriels à l'arrêt (usines, fonderies, filatures…) — beaucoup ont été démolis | Licence Ouverte |
+| [GeoNames](https://www.geonames.org) | 🌍 villages abandonnés ou détruits, ruines, fermes, aérodromes, gares, mines abandonnés | CC-BY 4.0 |
+| 🇬🇧 [Heritage at Risk](https://historicengland.org.uk/advice/heritage-at-risk/) (Historic England) | bâtiments, structures et lieux de culte classés en danger | Open Government Licence |
+| 🇬🇧 [Brownfield land](https://www.planning.data.gov.uk/dataset/brownfield-land) | friches anglaises : seulement les anciens bâtiments (usines, moulins, hôpitaux…) | Open Government Licence |
+| 🇨🇦 [AMIS](https://data.ontario.ca/dataset/abandoned-mines-information) (Ontario) | mines abandonnées | Open Government Licence – Ontario |
 | **Communauté** | lieux proposés par les visiteurs et validés | — |
 
 Chaque source peut être affichée ou masquée dans le panneau « Sources ».
@@ -96,7 +100,7 @@ Ou pour refaire une source : `fetch_wikidata.py`, `fetch_opendata.py` (Mérimée
 
 ## Quels lieux sont inclus ?
 
-Tous les objets OSM du monde portant l'un de ces tags : `abandoned=yes`, `disused=yes`, `ruins=yes`, `historic=ruins`, `building=ruins|abandoned|disused`, `abandoned:*`, `disused:*`, `military=bunker`, `building=bunker`.
+Tous les objets OSM du monde portant l'un de ces tags : `abandoned=yes`, `disused=yes`, `ruins=yes`, `historic=ruins|bunker|mine`, `building=ruins|abandoned|disused|bunker`, `military=bunker`, `landuse=brownfield` (friches), `abandoned:place` (villages abandonnés), les gares `abandoned:railway` / `disused:railway`, les centrales `abandoned:power` / `disused:power`, les aérodromes `abandoned:aeroway` / `disused:aeroway`, et `abandoned:` / `disused:` suivis de `building`, `amenity`, `man_made`, `industrial`, `military`, `tourism`, `leisure` ou `landuse`.
 Les objets linéaires (routes, voies ferrées, lignes électriques…) sont exclus. La catégorie est déduite automatiquement des tags et du nom ; elle peut donc parfois être approximative.
 
 **Un lieu manque ou est faux ?** Corrige-le directement sur OpenStreetMap (lien dans chaque fiche) : il apparaîtra ici à la prochaine mise à jour.
@@ -113,6 +117,6 @@ Ce projet est un outil cartographique ; tu restes seul responsable de l'usage qu
 ## Licences
 
 - Code : [MIT](LICENSE)
-- Données : © contributeurs OpenStreetMap, sous licence [ODbL](https://opendatacommons.org/licenses/odbl/) ; Wikidata ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)) ; Mérimée, Cartofriches, CASIAS ([Licence Ouverte 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/)) ; photos Wikimedia Commons (licence propre à chaque photo)
+- Données : © contributeurs OpenStreetMap, sous licence [ODbL](https://opendatacommons.org/licenses/odbl/) ; Wikidata ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)) ; Mérimée, Cartofriches, CASIAS ([Licence Ouverte 2.0](https://www.etalab.gouv.fr/licence-ouverte-open-licence/)) ; GeoNames ([CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)) ; Historic England et planning.data.gov.uk ([Open Government Licence](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/), contient des données Historic England et du gouvernement britannique) ; Ontario AMIS ([Open Government Licence – Ontario](https://www.ontario.ca/page/open-government-licence-ontario)) ; photos Wikimedia Commons (licence propre à chaque photo)
 - Fonds de carte : OpenStreetMap, Esri, IGN (Géoplateforme)
 - Bibliothèques : [Leaflet](https://leafletjs.com), [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster)

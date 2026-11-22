@@ -42,13 +42,23 @@ CACHE = ROOT / "data" / ".cache"
 URL = "https://download.geofabrik.de/europe/france/france-latest.osm.pbf"
 UA = "urbex-map/1.0 (open-source map project)"
 
-# Mêmes critères que la requête Overpass de fetch_spots.py
+# Étiquettes retenues : valeur précise…
 EXACT = {
-    "abandoned": {"yes"}, "disused": {"yes"}, "ruins": {"yes"}, "historic": {"ruins"},
+    "abandoned": {"yes"}, "disused": {"yes"}, "ruins": {"yes"},
+    "historic": {"ruins", "bunker", "mine"},
     "building": {"ruins", "abandoned", "disused", "bunker"}, "military": {"bunker"},
+    "landuse": {"brownfield"},                                   # friches
+    "abandoned:railway": {"station", "halt"}, "disused:railway": {"station", "halt"},  # gares (pas les voies)
+    "abandoned:power": {"plant", "substation"}, "disused:power": {"plant", "substation"},
+    "abandoned:aeroway": {"aerodrome", "hangar", "terminal", "control_tower", "airstrip", "heliport"},
+    "disused:aeroway": {"aerodrome", "hangar", "terminal", "control_tower", "airstrip", "heliport"},
 }
+# … ou n'importe quelle valeur
 ANY_VALUE = ("abandoned:building", "abandoned:amenity", "abandoned:man_made", "abandoned:industrial",
-             "disused:amenity", "disused:building", "disused:man_made")
+             "disused:amenity", "disused:building", "disused:man_made",
+             "abandoned:place",                                  # villages abandonnés
+             "abandoned:military", "disused:military", "abandoned:tourism", "disused:tourism",
+             "abandoned:leisure", "disused:leisure", "abandoned:landuse", "disused:landuse")
 
 # Expressions pour « osmium tags-filter »
 OSMIUM_FILTERS = [f"nwr/{k}={','.join(sorted(v))}" for k, v in EXACT.items()] + [f"nwr/{k}" for k in ANY_VALUE]

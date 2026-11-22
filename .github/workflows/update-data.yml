@@ -91,6 +91,12 @@ jobs:
       - name: Mérimée, Cartofriches et CASIAS (France)
         run: python scripts/fetch_opendata.py --fresh
         continue-on-error: true
+      - name: GeoNames (monde entier)
+        run: python scripts/fetch_geonames.py --fresh
+        continue-on-error: true
+      - name: Angleterre (Heritage at Risk, friches) et Ontario (mines)
+        run: python scripts/fetch_international.py
+        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: autres
@@ -99,6 +105,10 @@ jobs:
             data/spots_merimee.json
             data/spots_friches.json
             data/spots_casias.json
+            data/spots_geonames.json
+            data/spots_heritage.json
+            data/spots_friches_uk.json
+            data/spots_mines_on.json
           retention-days: 3
           if-no-files-found: warn
 

@@ -15,6 +15,7 @@ Les données viennent de bases libres et ouvertes, mises à jour automatiquement
 | 🇬🇧 [Heritage at Risk](https://historicengland.org.uk/advice/heritage-at-risk/) (Historic England) | bâtiments, structures et lieux de culte classés en danger | Open Government Licence |
 | 🇬🇧 [Brownfield land](https://www.planning.data.gov.uk/dataset/brownfield-land) | friches anglaises : seulement les anciens bâtiments (usines, moulins, hôpitaux…) | Open Government Licence |
 | 🇨🇦 [AMIS](https://data.ontario.ca/dataset/abandoned-mines-information) (Ontario) | mines abandonnées | Open Government Licence – Ontario |
+| [GeoNames cities15000](https://www.geonames.org) | 🌍 villes de plus de 15 000 habitants, pour la recherche par ville (`scripts/build_cities.py`) | CC-BY 4.0 |
 | **Communauté** | lieux proposés par les visiteurs et validés | — |
 
 Chaque source peut être affichée ou masquée dans le panneau « Sources ».

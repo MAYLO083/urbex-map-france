@@ -345,6 +345,19 @@
     return shards.get(p);
   };
   let lastFound = [];
+  // Villes du monde (> 15 000 habitants, GeoNames) : chargées à la première recherche
+  let citiesP = null;
+  const loadCities = () => {
+    if (!citiesP) {
+      citiesP = fetch(`data/cities.json?v=${meta ? meta.v : 1}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((rows) => rows.map((r) => [r, norm(r[0])]))
+        .catch(() => { citiesP = null; return []; });
+    }
+    return citiesP;
+  };
+  const flag = (cc) => (/^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map((c) => 127397 + c.charCodeAt(0))) : "");
+  let cityFound = [];
   const results = $("results");
   let searchTimer;
   $("search").addEventListener("input", (e) => {
@@ -364,6 +377,8 @@
     const words = q.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
     const mineFound = mine.filter((m) => words.every((w) => norm(m.name || "").includes(w)));
     lastFound = [];
+    cityFound = [];
+    const citiesReady = loadCities();
     const key = words.filter((w) => chars(w).length >= 3 && !COMMON.has(w)).sort((a, b) => chars(b).length - chars(a).length)[0];
     let note = "";
     if (key && meta) {
@@ -375,9 +390,19 @@
         if (words.every((w) => n.includes(w))) { lastFound.push(r); if (lastFound.length >= 50) break; }
       }
     } else if (!mineFound.length) note = "Tape un mot d'au moins 3 lettres (ex. sanatorium, Beelitz…)";
+    const cities = await citiesReady;
+    if (seq !== searchSeq) return;
+    for (const [r, n] of cities) {
+      if (n.startsWith(q) || (n.startsWith(words[0]) && words.every((w) => n.includes(w)))) {
+        cityFound.push(r);
+        if (cityFound.length >= 4) break;
+      }
+    }
     results.innerHTML = "";
-    if (!mineFound.length && !lastFound.length) { results.innerHTML = `<li class="none">${note || "Aucun lieu trouvé"}</li>`; return; }
-    results.innerHTML = mineFound.map((f) => `<li tabindex="0" data-m="${f.id}"><span class="ico" style="background:#ff3d0022">📌</span>
+    if (!mineFound.length && !lastFound.length && !cityFound.length) { results.innerHTML = `<li class="none">${note || "Aucun lieu trouvé"}</li>`; return; }
+    results.innerHTML = cityFound.map((c, i) => `<li tabindex="0" data-c="${i}"><span class="ico" style="background:#5ab0ff22">🏙️</span>
+        <span class="txt"><b>${esc(c[0])}</b><small>Ville · ${flag(c[3])} ${esc(c[3])}</small></span></li>`).join("") +
+      mineFound.map((f) => `<li tabindex="0" data-m="${f.id}"><span class="ico" style="background:#ff3d0022">📌</span>
         <span class="txt"><b>${esc(f.name)}</b><small>Mon spot</small></span></li>`).join("") +
       lastFound.map((r, i) => {
         const c = CATEGORIES[r[3]] || CATEGORIES.autre;
@@ -388,7 +413,12 @@
   results.onclick = (e) => {
     const li = e.target.closest("li");
     if (!li) return;
-    if (li.dataset.r) focusRemote(lastFound[+li.dataset.r]);
+    if (li.dataset.c) {
+      const c = cityFound[+li.dataset.c];
+      if (isMobile()) openSheet(false);
+      map.setView([c[1], c[2]], 12);
+      updateView();
+    } else if (li.dataset.r) focusRemote(lastFound[+li.dataset.r]);
     else if (li.dataset.m) focusMine(mine.find((m) => m.id === li.dataset.m));
   };
 

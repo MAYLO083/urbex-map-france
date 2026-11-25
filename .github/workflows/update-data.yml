@@ -15,6 +15,10 @@ on:
         description: "Mettre aussi à jour OpenStreetMap (monde entier, ~1 h)"
         type: boolean
         default: true
+      regions:
+        description: "Seulement ces régions OpenStreetMap (ex. europe/france/reunion asia/thailand), séparées par des espaces. Vide = le monde entier"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -29,6 +33,7 @@ jobs:
     outputs:
       lots: ${{ steps.plan.outputs.lots }}
       osm: ${{ steps.when.outputs.osm }}
+      partial: ${{ steps.plan.outputs.partial }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,7 +50,17 @@ jobs:
           fi
       - id: plan
         if: steps.when.outputs.osm == 'true'
-        run: python scripts/plan_regions.py --github >> "$GITHUB_OUTPUT"
+        env:
+          REGIONS: ${{ inputs.regions }}
+        run: |
+          if [ -n "$REGIONS" ]; then
+            # Seulement quelques régions : un seul lot, les autres régions gardent leurs données
+            python -c "import json, os; print('lots=' + json.dumps([{'lot': '01', 'urls': ' '.join(f'https://download.geofabrik.de/{r.strip(\"/\")}-latest.osm.pbf' for r in os.environ['REGIONS'].split())}]))" >> "$GITHUB_OUTPUT"
+            echo "partial=true" >> "$GITHUB_OUTPUT"
+          else
+            python scripts/plan_regions.py --github >> "$GITHUB_OUTPUT"
+            echo "partial=false" >> "$GITHUB_OUTPUT"
+          fi
 
   osm:
     needs: plan
@@ -147,9 +162,10 @@ jobs:
       - name: Ranger les nouvelles versions
         env:
           LOTS: ${{ needs.plan.outputs.lots }}
+          PARTIAL: ${{ needs.plan.outputs.partial }}
         run: |
           # Régions qui ne font plus partie du découpage actuel : supprimées
-          if [ -n "$LOTS" ]; then
+          if [ -n "$LOTS" ] && [ "$PARTIAL" != "true" ]; then
             python - <<'EOF'
           import json, os, pathlib
           keep = {u.split("download.geofabrik.de/", 1)[-1].replace("-latest.osm.pbf", "").replace("/", "_")

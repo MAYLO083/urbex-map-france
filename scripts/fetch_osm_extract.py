@@ -34,6 +34,7 @@ from pathlib import Path
 import osmium
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ipv4  # noqa: E402,F401  (évite « Network is unreachable » sur GitHub)
 from fetch_spots import categorize, describe, keep  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,7 +74,7 @@ def matches(tags: dict) -> bool:
 
 def download(url: str, path: Path) -> None:
     print(f"→ téléchargement {url}", flush=True)
-    for attempt in range(4):
+    for attempt in range(6):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
             done = 0

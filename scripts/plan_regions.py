@@ -22,6 +22,10 @@ from __future__ import annotations
 import json
 import sys
 import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ipv4  # noqa: E402,F401
 from concurrent.futures import ThreadPoolExecutor
 
 INDEX = "https://download.geofabrik.de/index-v1-nogeom.json"

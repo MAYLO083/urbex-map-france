@@ -20,6 +20,7 @@ GitHub, donc la modération ne change pas : label `validé` → lieu retiré (si
    npx wrangler login
    npx wrangler secret put GITHUB_TOKEN        # coller le jeton GitHub
    npx wrangler secret put TURNSTILE_SECRET    # coller la Secret Key Turnstile
+   npx wrangler secret put MODO_CODE           # code modérateur (boutons Accepter / Refuser)
    npx wrangler deploy
    ```
 
@@ -32,3 +33,11 @@ Tant que `RELAY` est vide, l'appli garde les liens vers les formulaires GitHub.
 
 `.dev.vars` (non versionné) : `GITHUB_TOKEN=…` et, pour ne rien créer, `GITHUB_API=http://127.0.0.1:9999` (faux serveur).
 Puis `npx wrangler dev --port 8787` et, dans `js/app.js`, `RELAY = "http://127.0.0.1:8787"`.
+
+## Boutons Accepter / Refuser
+
+Chaque ticket commence par **✅ Accepter · ❌ Refuser** (lien vers `/moderer` du relais).
+Le dépôt est public : les boutons ne marchent qu'avec le **code modérateur** (secret `MODO_CODE`),
+demandé une fois par appareil puis gardé un an dans un cookie du relais.
+- Accepter → pose le label `validé` (le workflow GitHub retire ou ajoute le lieu, puis ferme le ticket)
+- Refuser → ferme le ticket (« not planned ») avec un commentaire, la carte ne change pas

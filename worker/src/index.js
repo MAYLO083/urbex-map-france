@@ -13,6 +13,8 @@
  * Variables (wrangler.toml) : REPO, ALLOWED_ORIGINS
  */
 
+import { buttons, moderate } from "./moderation.js";
+
 const REASONS = [
   "Démoli ou détruit",
   "Rénové, réhabilité ou reconstruit (plus abandonné)",
@@ -102,6 +104,7 @@ function proposal(d) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname === "/moderer") return moderate(request, env);   // boutons Accepter / Refuser des tickets
     const origin = request.headers.get("Origin") || "";
     const allowed = env.ALLOWED_ORIGINS.split(",").map((s) => s.trim());
     const ok = allowed.includes(origin) ? origin : allowed[0];
@@ -145,6 +148,15 @@ export default {
       return json({ error: "Envoi impossible pour le moment, réessaie plus tard." }, 502, ok);
     }
     const created = await r.json();
+    // Boutons Accepter / Refuser en tête du ticket (le numéro n'est connu qu'après la création)
+    await fetch(`${env.GITHUB_API || "https://api.github.com"}/repos/${env.REPO}/issues/${created.number}`, {
+      method: "PATCH",
+      headers: { "Authorization": `Bearer ${env.GITHUB_TOKEN}`, "Accept": "application/vnd.github+json",
+        "User-Agent": "urbex-map-relais", "X-GitHub-Api-Version": "2022-11-28" },
+      body: JSON.stringify({ body: `${buttons(url.origin, created.number)}
+
+${issue.body}` }),
+    }).catch(() => {});
     return json({ ok: true, numero: created.number }, 200, ok);
   },
 };

@@ -43,4 +43,6 @@ jobs:
         if: steps.lien.outputs.url != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh issue comment ${{ github.event.issue.number }} --repo ${{ github.repository }} --body "**[📍 Voir sur la carte](${{ steps.lien.outputs.url }})**"
+          RELAIS: https://urbex-map-relais.world-urbex.workers.dev
+          N: ${{ github.event.issue.number }}
+        run: gh issue comment "$N" --repo ${{ github.repository }} --body "**[📍 Voir sur la carte](${{ steps.lien.outputs.url }})** · **[✅ Accepter]($RELAIS/moderer?n=$N&a=accepter)** · **[❌ Refuser]($RELAIS/moderer?n=$N&a=refuser)**"

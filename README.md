@@ -26,6 +26,13 @@ Chaque source peut être affichée ou masquée dans le panneau « Sources ».
 
 Le salon **#mises-à-jour-carte** reçoit automatiquement un message à chaque mise à jour de la carte et à chaque lieu de la communauté validé (`scripts/discord_notify.py`, webhook enregistré dans le secret `DISCORD_WEBHOOK` du dépôt).
 
+## Signaler un lieu (démoli, rénové, habité…)
+
+Chaque fiche de lieu a un lien **🚩 Signaler un problème**, qui ouvre le formulaire GitHub « Signaler un lieu » déjà rempli (identifiants du lieu, nom, position).
+Comme pour les propositions, **seul le propriétaire du dépôt modère** :
+- label **`validé`** posé → le lieu est ajouté à `data/lieux_retires.json` et disparaît de la carte, même après les mises à jour suivantes ;
+- label **`validé`** retiré → le lieu réapparaît.
+
 ## Proposer un lieu
 
 Bouton **« Proposer un lieu à la communauté »** sur la carte (ou dans la fiche d'un de tes spots perso) → formulaire GitHub.

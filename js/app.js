@@ -26,8 +26,8 @@
   const fmt = (n) => n.toLocaleString("fr-FR");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   // Relais Cloudflare (worker/) : signaler et proposer sans compte GitHub. Vide = liens GitHub classiques.
-  const RELAY = "";
-  const TURNSTILE_SITEKEY = "";
+  const RELAY = "https://urbex-map-relais.world-urbex.workers.dev";
+  const TURNSTILE_SITEKEY = "0x4AAAAAAGSwpcxkprI2Tng5";
   const proposeUrl = (lat, lon, name = "") =>
     `${REPO}/issues/new?template=nouveau-spot.yml&title=${encodeURIComponent("[Spot] " + name)}` +
     `&coordonnees=${encodeURIComponent(lat.toFixed(5) + ", " + lon.toFixed(5))}&nom=${encodeURIComponent(name)}`;

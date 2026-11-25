@@ -155,8 +155,22 @@ def describe(tags: dict) -> str:
     return ""
 
 
+# Préfixes « cycle de vie » d'OpenStreetMap qui veulent dire que l'objet n'existe plus
+GONE_PREFIXES = ("demolished:", "razed:", "destroyed:", "removed:")
+GONE_VALUES = {"demolished", "razed", "destroyed", "removed"}
+
+
+def gone(tags: dict) -> bool:
+    """Vrai si un contributeur OSM a indiqué que le bâtiment a été démoli ou rasé."""
+    if any(k.startswith(GONE_PREFIXES) for k in tags):
+        return True
+    if tags.get("demolished") == "yes" or tags.get("razed") == "yes":
+        return True
+    return any(tags.get(k) in GONE_VALUES for k in ("building", "abandoned:building", "disused:building", "historic"))
+
+
 def keep(tags: dict) -> bool:
-    if not tags:
+    if not tags or gone(tags):
         return False
     has_building = any(tags.get(k) for k in LINE_OK_IF)
     if not has_building:

@@ -18,7 +18,7 @@
   const STORE_KEY = "urbex.mine.v1";
   const FILTER_KEY = "urbex.filters.v1";
   const SEEN_KEY = "urbex.disclaimer.v1";
-  const SOURCE_KEY = "urbex.sources.v1";
+  const SOURCE_KEY = "urbex.sources.v2";
   const BASE_KEY = "urbex.base.v1";
   const REPO = "https://github.com/MAYLO083/urbex-map-france";
   const isMobile = () => matchMedia("(max-width: 760px)").matches;
@@ -132,7 +132,7 @@
       link: (id) => [`https://www.planning.data.gov.uk/entity/${id.slice(1)}`, "Fiche du registre"] },
     mines_on: { label: "Mines abandonnées 🇨🇦", hint: "AMIS · Ontario",
       link: (id) => [`https://www.geologyontario.mines.gov.on.ca/persistent-linking?abandoned-mine=${id.slice(1)}`, "Fiche AMIS"] },
-    casias: { label: "Anciens sites industriels 🇫🇷", hint: "CASIAS · souvent démolis",
+    casias: { label: "Anciens sites industriels 🇫🇷", hint: "CASIAS · souvent démolis · masqué par défaut",
       link: (id) => [`https://fiches-risques.brgm.fr/georisques/casias/${id.slice(1)}`, "Fiche Géorisques"] },
   };
 
@@ -147,7 +147,12 @@
   const shown = new Set();    // cases dont les marqueurs sont sur la carte
   const byId = new Map();     // id → [lieu, marqueur]
   const active = new Set(JSON.parse(localStorage.getItem(FILTER_KEY) || "null") || Object.keys(CATEGORIES));
-  const activeSources = new Set(JSON.parse(localStorage.getItem(SOURCE_KEY) || "null") || Object.keys(SOURCES));
+  // CASIAS (anciens sites industriels, souvent démolis ou reconstruits) est masqué par défaut.
+  // Les choix enregistrés avec l'ancienne version sont repris, sans CASIAS.
+  const HIDDEN_BY_DEFAULT = ["casias"];
+  const savedSources = JSON.parse(localStorage.getItem(SOURCE_KEY) || "null")
+    || (JSON.parse(localStorage.getItem("urbex.sources.v1") || "null") || Object.keys(SOURCES)).filter((s) => !HIDDEN_BY_DEFAULT.includes(s));
+  const activeSources = new Set(savedSources);
   let namedOnly = false;
   let pendingFocus = null;
 

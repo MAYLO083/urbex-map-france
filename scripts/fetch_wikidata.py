@@ -56,7 +56,9 @@ SELECT ?i ?iLabel ?coord ?type ?img WHERE {
   ?i wdt:P625 ?coord.
   BIND(geof:longitude(?coord) AS ?lon)
   FILTER(?lon >= %s && ?lon < %s)
-  FILTER NOT EXISTS { ?i wdt:P5817 wd:Q56556915 }
+  FILTER NOT EXISTS { ?i wdt:P5817 wd:Q56556915 }   # état d'usage : démoli ou détruit
+  FILTER NOT EXISTS { ?i wdt:P5816 wd:Q56556915 }   # état de conservation : démoli ou détruit
+  FILTER NOT EXISTS { ?i wdt:P31 wd:Q19860854 }     # nature : bâtiment ou structure détruit
   OPTIONAL { ?i wdt:P31 ?type. }
   OPTIONAL { ?i wdt:P18 ?img. }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "fr,en,mul,de,es,it,pt,nl,pl,ru,ja,zh". }

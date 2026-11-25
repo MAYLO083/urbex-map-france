@@ -185,7 +185,17 @@ jobs:
       - name: Enregistrer dans la Release « donnees »
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload donnees data/.dl/* --clobber --repo "${{ github.repository }}"
+        run: |
+          # Fichier par fichier, avec nouveaux essais : une erreur passagère de GitHub (HTTP 500)
+          # pendant le remplacement d'un fichier ne doit pas faire perdre les données
+          for f in data/.dl/*; do
+            ok=
+            for i in 1 2 3 4 5; do
+              gh release upload donnees "$f" --clobber --repo "${{ github.repository }}" && ok=1 && break
+              echo "  échec pour $f, nouvel essai dans $((i * 20)) s…"; sleep $((i * 20))
+            done
+            [ -n "$ok" ] || { echo "::error::$f n'a pas pu être enregistré"; exit 1; }
+          done
 
   publier:
     needs: ranger

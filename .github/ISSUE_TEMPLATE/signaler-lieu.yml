@@ -1,0 +1,42 @@
+name: 🚩 Signaler un lieu
+description: Un lieu de la carte n'existe plus, a été rénové, est habité ou mal placé
+title: "[Signalement] "
+labels: ["signalement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Merci de nous aider à garder la carte à jour ! Ton signalement sera vérifié, puis le lieu sera retiré ou corrigé.
+        Ouvre ce formulaire avec le bouton **🚩 Signaler** de la fiche du lieu : les premiers champs sont alors remplis tout seuls.
+  - type: input
+    id: lieu
+    attributes:
+      label: Identifiant du lieu (ne pas modifier)
+      description: Rempli automatiquement par le bouton « Signaler » de la carte.
+    validations:
+      required: true
+  - type: input
+    id: nom
+    attributes:
+      label: Nom du lieu
+  - type: input
+    id: position
+    attributes:
+      label: Position
+  - type: dropdown
+    id: probleme
+    attributes:
+      label: Quel est le problème ?
+      options:
+        - Démoli ou détruit
+        - Rénové, réhabilité ou reconstruit (plus abandonné)
+        - Habité ou de nouveau en activité
+        - N'existe pas à cet endroit (erreur de position ou de données)
+        - Autre
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Détails (facultatif)
+      description: Ce que tu as constaté, et quand (date de ta visite, photo, article de presse…).

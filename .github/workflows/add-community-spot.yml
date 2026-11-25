@@ -20,7 +20,8 @@ jobs:
   moderate:
     if: >-
       github.event.label.name == 'validé' &&
-      github.event.sender.login == github.repository_owner
+      github.event.sender.login == github.repository_owner &&
+      !contains(github.event.issue.labels.*.name, 'signalement')
     runs-on: ubuntu-latest
     outputs:
       summary: ${{ steps.spot.outputs.summary }}

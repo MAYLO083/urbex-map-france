@@ -192,6 +192,16 @@
       <a class="act" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}">${ICONS.go}Y aller</a>
     </div>`;
 
+  // Formulaire GitHub « Signaler un lieu », pré-rempli avec les fiches du lieu (toutes sources fusionnées)
+  const REPO = "https://github.com/MAYLO083/urbex-map-france";
+  const reportUrl = (s, refs) => `${REPO}/issues/new?` + new URLSearchParams({
+    template: "signaler-lieu.yml",
+    title: `[Signalement] ${s[2] || "Lieu sans nom"}`,
+    lieu: refs.map(([k, id]) => `${k}:${id}`).join(" "),
+    nom: s[2] || "",
+    position: `${s[0].toFixed(5)}, ${s[1].toFixed(5)}`,
+  });
+
   const spotPopup = (s) => {
     const cat = CATEGORIES[s[3]] || CATEGORIES.autre;
     const src = SOURCES[s._src];
@@ -210,6 +220,7 @@
         ${coordsBtn(s[0], s[1])}
         ${actionsHtml(s[0], s[1])}
         <div class="src-links">${links}</div>
+        <a class="report-link" target="_blank" rel="noopener" href="${reportUrl(s, refs)}">🚩 Signaler un problème (démoli, rénové, habité…)</a>
       </div>
     </div>`;
   };

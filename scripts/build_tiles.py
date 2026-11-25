@@ -77,8 +77,18 @@ def similar(a: frozenset, b: frozenset) -> bool:
     return len(a & b) / min(len(a), len(b)) >= 0.6
 
 
+def removed_refs() -> set[str]:
+    """Lieux retirés après un signalement validé (data/lieux_retires.json, « source:identifiant »)."""
+    p = DATA / "lieux_retires.json"
+    if not p.exists():
+        return set()
+    return {r for x in json.loads(p.read_text(encoding="utf-8"))["lieux"] for r in x["refs"]}
+
+
 def load() -> tuple[list, str]:
     spots, generated = [], ""
+    gone = removed_refs()
+    dropped = 0
     for src, fname in SOURCES.items():
         p = DATA / fname
         files = sorted(p.glob("*.json")) if p.is_dir() else [p] if p.exists() else []
@@ -93,11 +103,16 @@ def load() -> tuple[list, str]:
                 if s[5] in ids:  # même objet dans deux extraits voisins
                     continue
                 ids.add(s[5])
+                if f"{src}:{s[5]}" in gone:  # signalé (démoli, rénové…) et validé
+                    dropped += 1
+                    continue
                 # [lat, lon, nom, catégorie, description, id, image]
                 spots.append({"lat": s[0], "lon": s[1], "name": s[2] or "", "cat": s[3], "desc": s[4] or "",
                               "id": s[5], "img": s[6] if len(s) > 6 else "", "src": src, "also": []})
                 n += 1
         print(f"  {src:11s} {n:8d}" + (f"  ({len(files)} fichiers)" if len(files) > 1 else ""), flush=True)
+    if gone:
+        print(f"  {dropped} fiches retirées après signalement ({len(gone)} demandées)", flush=True)
     return spots, generated
 
 

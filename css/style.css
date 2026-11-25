@@ -334,6 +334,27 @@ dialog li { display: flex; gap: 12px; padding: 11px 12px; border-radius: 13px; b
 dialog li span { font-size: 18px; }
 dialog li b { color: var(--text); }
 dialog .btn { width: 100%; height: 46px; font-size: 14px; }
+/* Formulaires « Signaler » et « Proposer » */
+.form-dlg { width: min(440px, calc(100vw - 24px)); text-align: left; }
+.form-dlg h2 { margin-top: 0; }
+.form-dlg .dlg-sub { margin: -8px 0 14px; color: var(--muted); font-size: 13px; }
+.form-dlg form { display: flex; flex-direction: column; gap: 12px; }
+.form-dlg label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); }
+.form-dlg label small { font-weight: 400; color: var(--muted); }
+.form-dlg input, .form-dlg select, .form-dlg textarea { font: inherit; font-weight: 400; color: var(--text); background: var(--card);
+  border: 1px solid rgba(255, 255, 255, .12); border-radius: 11px; padding: 10px 12px; }
+.form-dlg textarea { min-height: 84px; resize: vertical; }
+.form-dlg select option { background: #1a1d24; }
+.form-dlg .coord-row { display: flex; gap: 8px; }
+.form-dlg .coord-row input { flex: 1; min-width: 0; }
+.form-dlg .coord-row .btn { width: auto; height: auto; padding: 0 12px; font-size: 12px; white-space: nowrap; }
+.form-dlg .check { flex-direction: row; align-items: flex-start; gap: 10px; font-weight: 400; color: #c9cdd6; line-height: 1.4; }
+.form-dlg .check input { margin-top: 2px; }
+.form-dlg .row { display: flex; gap: 10px; }
+.form-msg { margin: 0; font-size: 13px; min-height: 1em; }
+.form-msg.ok { color: #2ed3b7; }
+.form-msg.err { color: #ff7b7b; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 
 /* ------------------------------------------------------------ Mobile : panneau en bas (« bottom sheet ») */
 @media (max-width: 760px) {

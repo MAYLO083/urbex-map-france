@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="css/style.css?v=16">
+  <link rel="stylesheet" href="css/style.css?v=17">
 </head>
 <body>
   <!-- Écran de chargement -->
@@ -81,7 +81,7 @@
         <div class="section-head"><h2>Sources</h2></div>
         <div id="sources" class="list"></div>
 
-        <a class="cta" href="https://github.com/MAYLO083/urbex-map-france/issues/new?template=nouveau-spot.yml" target="_blank" rel="noopener">
+        <a class="cta" id="propose-cta" href="https://github.com/MAYLO083/urbex-map-france/issues/new?template=nouveau-spot.yml" target="_blank" rel="noopener">
           <span>＋</span> Proposer un lieu à la communauté
         </a>
       </section>
@@ -145,8 +145,39 @@
     <form method="dialog"><button autofocus class="btn primary">J'ai compris</button></form>
   </dialog>
 
+  <!-- Signaler un lieu, sans compte : envoyé au relais Cloudflare qui crée l'issue GitHub -->
+  <dialog id="report-dlg" class="form-dlg">
+    <h2>🚩 Signaler ce lieu</h2>
+    <p class="dlg-sub" id="report-name"></p>
+    <form id="report-form">
+      <label>Quel est le problème ?<select name="probleme" required><option value="">Choisir…</option><option>Démoli ou détruit</option><option>Rénové, réhabilité ou reconstruit (plus abandonné)</option><option>Habité ou de nouveau en activité</option><option>N'existe pas à cet endroit (erreur de position ou de données)</option><option>Autre</option></select></label>
+      <label>Détails <small>(facultatif)</small><textarea name="details" maxlength="1500" placeholder="Ce que tu as constaté, et quand (date de ta visite, article…)"></textarea></label>
+      <input name="site" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <div class="ts"></div>
+      <p class="form-msg" role="status"></p>
+      <div class="row"><button type="button" class="btn" data-close>Annuler</button><button class="btn primary" type="submit">Envoyer</button></div>
+    </form>
+  </dialog>
+
+  <!-- Proposer un lieu, sans compte -->
+  <dialog id="propose-dlg" class="form-dlg">
+    <h2>📍 Proposer un lieu</h2>
+    <p class="dlg-sub">Il sera vérifié avant d'apparaître sur la carte.</p>
+    <form id="propose-form">
+      <label>Nom du lieu<input name="nom" required maxlength="120" placeholder="Sanatorium de …, Usine …, Château …"></label>
+      <label>Coordonnées GPS<span class="coord-row"><input name="coordonnees" required placeholder="45.12345, 4.56789"><button type="button" class="btn" data-center>Centre de la carte</button></span></label>
+      <label>Catégorie<select name="categorie" required><option value="">Choisir…</option><option>Industriel</option><option>Militaire / bunkers</option><option>Hôpitaux / sanatoriums</option><option>Châteaux / manoirs</option><option>Religieux</option><option>Transport / gares / tunnels</option><option>Hôtels / écoles / loisirs</option><option>Maisons / fermes</option><option>Ruines</option><option>Autre</option></select></label>
+      <label>Description <small>(facultatif)</small><textarea name="description" maxlength="1500" placeholder="État du lieu, histoire, dernière visite… (pas d'indication pour entrer par effraction)"></textarea></label>
+      <label class="check"><input type="checkbox" name="regles" required> Ce lieu n'est pas habité et je n'ai pas d'information indiquant que son propriétaire refuse sa diffusion.</label>
+      <input name="site" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <div class="ts"></div>
+      <p class="form-msg" role="status"></p>
+      <div class="row"><button type="button" class="btn" data-close>Annuler</button><button class="btn primary" type="submit">Envoyer</button></div>
+    </form>
+  </dialog>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-  <script src="js/app.js?v=16"></script>
+  <script src="js/app.js?v=17"></script>
 </body>
 </html>

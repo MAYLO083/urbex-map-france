@@ -25,6 +25,9 @@
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => n.toLocaleString("fr-FR");
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  // Relais Cloudflare (worker/) : signaler et proposer sans compte GitHub. Vide = liens GitHub classiques.
+  const RELAY = "";
+  const TURNSTILE_SITEKEY = "";
   const proposeUrl = (lat, lon, name = "") =>
     `${REPO}/issues/new?template=nouveau-spot.yml&title=${encodeURIComponent("[Spot] " + name)}` +
     `&coordonnees=${encodeURIComponent(lat.toFixed(5) + ", " + lon.toFixed(5))}&nom=${encodeURIComponent(name)}`;
@@ -36,6 +39,78 @@
     go: '<svg viewBox="0 0 24 24"><path d="M3 11l18-8-8 18-2-8z"/></svg>',
     ext: '<svg viewBox="0 0 24 24" style="width:13px;height:13px"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   };
+
+  // ================================================================ Signaler / proposer sans compte (via le relais)
+  let tsLoaded = null;
+  const loadTurnstile = () => tsLoaded || (tsLoaded = new Promise((ok, ko) => {
+    const sc = document.createElement("script");
+    sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    sc.onload = ok; sc.onerror = ko;
+    document.head.appendChild(sc);
+  }));
+  const setupForm = (dlgId, path, okText, extra) => {
+    const dlg = $(dlgId), form = dlg.querySelector("form"), msg = dlg.querySelector(".form-msg"), ts = dlg.querySelector(".ts");
+    let token = "", widget = null;
+    dlg.querySelector("[data-close]").onclick = () => dlg.close();
+    const open = async (fill) => {
+      form.reset();
+      msg.textContent = ""; msg.className = "form-msg";
+      form.querySelector("[type=submit]").disabled = false;
+      fill(form);
+      dlg.showModal();
+      if (TURNSTILE_SITEKEY) {
+        try {
+          await loadTurnstile();
+          if (widget === null) widget = window.turnstile.render(ts, { sitekey: TURNSTILE_SITEKEY, theme: "dark", callback: (t) => { token = t; } });
+          else { window.turnstile.reset(widget); token = ""; }
+        } catch { msg.textContent = "Vérification anti-robots indisponible, réessaie plus tard."; msg.className = "form-msg err"; }
+      }
+    };
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector("[type=submit]");
+      const data = Object.fromEntries(new FormData(form));
+      if (form.regles) data.regles = form.regles.checked;
+      Object.assign(data, extra ? extra() : {}, { turnstile: token });
+      btn.disabled = true; msg.textContent = "Envoi…"; msg.className = "form-msg";
+      try {
+        const r = await fetch(RELAY + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+        const res = await r.json().catch(() => ({}));
+        if (!r.ok || !res.ok) throw new Error(res.error || "Envoi impossible, réessaie plus tard.");
+        msg.textContent = okText; msg.className = "form-msg ok";
+        setTimeout(() => dlg.close(), 2500);
+      } catch (err) {
+        msg.textContent = err.message; msg.className = "form-msg err";
+        btn.disabled = false;
+        if (widget !== null) { window.turnstile.reset(widget); token = ""; }
+      }
+    };
+    return open;
+  };
+  let reportTarget = null;
+  const openReport = setupForm("report-dlg", "/signaler", "✅ Merci ! Ton signalement est envoyé, il sera vérifié rapidement.", () => reportTarget);
+  const openProposeForm = setupForm("propose-dlg", "/proposer", "✅ Merci ! Ta proposition est envoyée, elle sera vérifiée avant publication.");
+  const openPropose = (p) => openProposeForm((f) => {
+    f.nom.value = p.nom || "";
+    f.coordonnees.value = p.lat != null ? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : "";
+    f.description.value = p.description || "";
+  });
+  document.addEventListener("click", (e) => {
+    if (!RELAY) return;
+    const a = e.target.closest(".report-link");
+    if (!a) return;
+    e.preventDefault();
+    reportTarget = { lieu: a.dataset.refs, nom: a.dataset.nom, position: a.dataset.pos };
+    openReport(() => { $("report-name").textContent = a.dataset.nom || "Lieu sans nom"; });
+  });
+  const centerText = () => { const c = map.getCenter(); return `${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}`; };
+  $("propose-dlg").querySelector("[data-center]").onclick = () => { $("propose-form").coordonnees.value = centerText(); };
+  $("propose-cta").addEventListener("click", (e) => {
+    if (!RELAY) return;
+    e.preventDefault();
+    const c = map.getCenter();
+    openPropose({ lat: c.lat, lon: c.lng });
+  });
 
   // ================================================================ Toast
   let toastTimer;
@@ -219,7 +294,9 @@
         ${coordsBtn(s[0], s[1])}
         ${actionsHtml(s[0], s[1])}
         <div class="src-links">${links}</div>
-        <a class="report-link" target="_blank" rel="noopener" href="${reportUrl(s, refs)}">🚩 Signaler un problème (démoli, rénové, habité…)</a>
+        <a class="report-link" target="_blank" rel="noopener" href="${reportUrl(s, refs)}"
+          data-refs="${esc(refs.map(([k, id]) => `${k}:${id}`).join(" "))}" data-nom="${esc(s[2] || "")}"
+          data-pos="${s[0].toFixed(5)}, ${s[1].toFixed(5)}">🚩 Signaler un problème (démoli, rénové, habité…)</a>
       </div>
     </div>`;
   };
@@ -485,7 +562,11 @@
         <div class="row"><button class="btn primary s">Enregistrer</button><button class="btn danger d">Supprimer</button></div>
         <a class="src-link p" target="_blank" rel="noopener" href="#">Proposer à la carte publique ${ICONS.ext}</a>
       </div>`;
-    div.querySelector(".p").onclick = (e) => { e.currentTarget.href = proposeUrl(m.lat, m.lon, div.querySelector(".n").value.trim()); };
+    div.querySelector(".p").onclick = (e) => {
+      const name = div.querySelector(".n").value.trim();
+      if (RELAY) { e.preventDefault(); openPropose({ lat: m.lat, lon: m.lon, nom: name, description: div.querySelector(".t").value }); return; }
+      e.currentTarget.href = proposeUrl(m.lat, m.lon, name);
+    };
     div.querySelector(".s").onclick = () => {
       m.name = div.querySelector(".n").value.trim() || "Mon spot";
       m.note = div.querySelector(".t").value;

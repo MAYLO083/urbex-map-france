@@ -193,7 +193,6 @@
     </div>`;
 
   // Formulaire GitHub « Signaler un lieu », pré-rempli avec les fiches du lieu (toutes sources fusionnées)
-  const REPO = "https://github.com/MAYLO083/urbex-map-france";
   const reportUrl = (s, refs) => `${REPO}/issues/new?` + new URLSearchParams({
     template: "signaler-lieu.yml",
     title: `[Signalement] ${s[2] || "Lieu sans nom"}`,

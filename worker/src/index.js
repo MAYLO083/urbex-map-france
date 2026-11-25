@@ -34,6 +34,8 @@ const clean = (v, max) => String(v ?? "")
   .slice(0, max);
 
 const section = (title, value) => `### ${title}\n\n${value || "_No response_"}\n\n`;
+const SITE = "https://maylo083.github.io/urbex-map-france/";
+const header = (link) => `_Envoyé depuis la carte (sans compte GitHub)._ · **[📍 Voir sur la carte](${link})**\n\n`;
 
 function json(data, status, origin) {
   return new Response(JSON.stringify(data), {
@@ -62,10 +64,12 @@ function report(d) {
   if (!refs || refs.length > 10) return { error: "Lieu inconnu : ouvre le signalement depuis la fiche du lieu." };
   if (!REASONS.includes(d.probleme)) return { error: "Choisis le problème dans la liste." };
   const nom = clean(d.nom, 120);
+  const pos = String(d.position || "").match(/(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/);
+  const link = `${SITE}?lieu=${encodeURIComponent(refs.join(" "))}` + (pos ? `#18/${pos[1]}/${pos[2]}` : "");
   return {
     title: `[Signalement] ${nom || "Lieu sans nom"}`,
     labels: ["signalement"],
-    body: "_Envoyé depuis la carte (sans compte GitHub)._\n\n"
+    body: header(link)
       + section("Identifiant du lieu (ne pas modifier)", refs.join(" "))
       + section("Nom du lieu", nom)
       + section("Position", clean(d.position, 60))
@@ -86,7 +90,7 @@ function proposal(d) {
   return {
     title: `[Spot] ${nom}`,
     labels: ["proposition"],
-    body: "_Envoyé depuis la carte (sans compte GitHub)._\n\n"
+    body: header(`${SITE}?repere=${lat.toFixed(5)},${lon.toFixed(5)}#17/${lat.toFixed(5)}/${lon.toFixed(5)}`)
       + section("Nom du lieu", nom)
       + section("Coordonnées GPS", `${lat.toFixed(5)}, ${lon.toFixed(5)}`)
       + section("Catégorie", d.categorie)

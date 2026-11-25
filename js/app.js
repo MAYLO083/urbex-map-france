@@ -231,6 +231,18 @@
   let namedOnly = false;
   let pendingFocus = null;
 
+  // Liens des tickets : ?lieu=osm:w123#18/lat/lon ouvre la fiche du lieu,
+  // ?repere=lat,lon pose un repère à l'endroit d'un lieu proposé
+  const urlParams = new URLSearchParams(location.search);
+  const lieuParam = urlParams.get("lieu");
+  if (lieuParam) pendingFocus = lieuParam.split(/[\s,]+/)[0].split(":").slice(1).join(":");
+  const repere = (urlParams.get("repere") || "").match(/^(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)$/);
+  if (repere) {
+    const ll = [+repere[1], +repere[2]];
+    if (!m0) map.setView(ll, 17);
+    L.marker(ll).addTo(map).bindPopup(`<div class="pop-body"><b>📍 Lieu proposé</b><br><small>${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}</small></div>`).openPopup();
+  }
+
   // ================================================================ Clusters & marqueurs
   function bubble(n) {
     const size = n < 10 ? 34 : n < 100 ? 42 : n < 1000 ? 50 : 58;
@@ -786,6 +798,7 @@
     if (pendingFocus && byId.has(pendingFocus)) {
       const [, m] = byId.get(pendingFocus);
       pendingFocus = null;
+      if (!cluster.hasLayer(m)) cluster.addLayer(m);   // lieu d'une source ou catégorie masquée
       cluster.zoomToShowLayer(m, () => m.openPopup());
     }
   };
